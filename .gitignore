@@ -1,0 +1,7 @@
+build/bin
+node_modules
+frontend/dist
+build/
+.cache/
+frontend/.npm-cache/
+frontend/node_modules/

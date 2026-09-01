@@ -35,7 +35,7 @@ export function TreeFolder({ folder, children, emptyHint, onMoveNode }) {
           onMoveNode?.(dragId, folder.id);
         }}
         className={cn(
-          'rounded-md transition-colors',
+          'app-no-drag rounded-md transition-colors',
           dropping && 'bg-primary/15 ring-1 ring-primary/50',
         )}
       >
@@ -43,7 +43,7 @@ export function TreeFolder({ folder, children, emptyHint, onMoveNode }) {
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 w-full justify-start gap-1.5 px-2 text-xs font-medium text-muted-foreground hover:text-secondary-foreground"
+            className="app-no-drag h-7 w-full justify-start gap-1.5 px-2 text-xs font-medium text-muted-foreground hover:text-secondary-foreground"
           >
             <ChevronRight
               className={cn(

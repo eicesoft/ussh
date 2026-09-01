@@ -8,7 +8,14 @@
   height: calc(100% - 16px);
   width: calc(100% - 12px);
   overflow: hidden;
-  background: #0b1220;
+  /* 背景色由外层终端容器统一承担（含透明度），这里保持透明避免二次混合。 */
+  background: transparent;
+}
+
+/* xterm 6.0 的样式给 .xterm-viewport 无条件画了不透明黑底（7.0 才修复），
+   会盖住外层容器的透明度，这里强制透明。 */
+.terminal-host .xterm .xterm-viewport {
+  background-color: transparent;
 }
 
 /* xterm 6 的文本选择依赖嵌入的 .xterm-accessibility-tree（透明镜像 DOM）：

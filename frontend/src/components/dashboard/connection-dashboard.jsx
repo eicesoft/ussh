@@ -15,7 +15,7 @@ export function ConnectionDashboard({ nodes, onConnect, onNew }) {
   const savedLinks = nodes.filter(node => node.type === 'ssh');
 
   return (
-    <div className="h-full overflow-auto bg-background p-6">
+    <div className="h-full select-none overflow-auto bg-background p-5">
       <div className="mx-auto w-full max-w-6xl">
         <header className="mb-7 flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-start gap-3">

@@ -94,9 +94,11 @@
     height: 100%;
     overflow: hidden;
     overscroll-behavior: none;
+    background-color: transparent !important;
   }
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply text-foreground antialiased;
+    background-color: transparent !important;
     font-family: Inter, "Segoe UI", Arial, sans-serif;
   }
   button,
@@ -115,4 +117,55 @@
 
 .tab-bar-scroll::-webkit-scrollbar {
   display: none;
+}
+
+/* 无边框窗口：可拖动的区域。Wails 会读取 --wails-draggable 的计算值，且该值会被子元素继承。 */
+.app-drag {
+  --wails-draggable: drag;
+}
+
+/* 明确排除拖动，避免交互控件（标签、按钮、输入框等）被当作窗口拖动。 */
+.app-no-drag {
+  --wails-draggable: no-drag;
+}
+
+/* 最大化时取消圆角；窗口状态切换时保留连续的边缘过渡。 */
+.app-window {
+  transition: border-radius 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-window {
+    transition: none;
+  }
+}
+
+@keyframes settings-dialog-open {
+  from {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--settings-origin-x)), calc(-50% + var(--settings-origin-y))) scale(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes settings-dialog-close {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--settings-origin-x)), calc(-50% + var(--settings-origin-y))) scale(0.3);
+  }
+}
+
+.settings-dialog-content[data-state='open'] {
+  animation: settings-dialog-open 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.settings-dialog-content[data-state='closed'] {
+  animation: settings-dialog-close 180ms cubic-bezier(0.4, 0, 1, 1);
 }

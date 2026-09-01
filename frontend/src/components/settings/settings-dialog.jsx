@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Slider } from '@/components/ui/slider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const themeOptions = [
@@ -26,12 +27,30 @@ const densityOptions = [
 const fontSizeOptions = [12, 13, 14, 15, 16];
 const scrollbackOptions = [1000, 5000, 10000, 20000];
 
-export function SettingsDialog({ open, onClose, settings, onSave }) {
+export function SettingsDialog({ open, anchorRef, onClose, settings, onSave }) {
   const [draft, setDraft] = useState(settings);
+  const [animationOrigin, setAnimationOrigin] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     if (open) setDraft(settings);
   }, [open, settings]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const updatePosition = () => {
+      const rect = anchorRef?.current?.getBoundingClientRect();
+      if (!rect) return;
+      setAnimationOrigin({
+        // Translate offsets are relative to the dialog center. A button in
+        // the upper-left therefore needs negative x/y offsets.
+        x: rect.left + rect.width / 2 - window.innerWidth / 2,
+        y: rect.top + rect.height / 2 - window.innerHeight / 2,
+      });
+    };
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    return () => window.removeEventListener('resize', updatePosition);
+  }, [open, anchorRef]);
 
   const updateDraft = (key, value) => {
     setDraft(current => ({ ...current, [key]: value }));
@@ -46,7 +65,15 @@ export function SettingsDialog({ open, onClose, settings, onSave }) {
 
   return (
     <Dialog open={open} onOpenChange={next => !next && onClose()}>
-      <DialogContent className="max-w-xl">
+      <DialogContent
+        className="settings-dialog-content max-h-[calc(100vh-3rem)] max-w-xl overflow-y-auto"
+        overlayClassName="bg-black/20 backdrop-blur-[1px]"
+        disableDefaultAnimation
+        style={{
+          '--settings-origin-x': `${animationOrigin.x}px`,
+          '--settings-origin-y': `${animationOrigin.y}px`,
+        }}
+      >
         <DialogHeader>
           <DialogTitle>软件设置</DialogTitle>
           <DialogDescription>调整 uSSH 的外观和终端行为，保存后生效。</DialogDescription>
@@ -80,6 +107,22 @@ export function SettingsDialog({ open, onClose, settings, onSave }) {
                   {densityOptions.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
                 </SelectContent>
               </Select>
+            </SettingRow>
+            <SettingRow label="终端透明度" description="降低不透明度可透出终端背后的桌面背景。">
+              <div className="flex items-center gap-2">
+                <Slider
+                  value={draft.terminal.opacity}
+                  min={10}
+                  max={100}
+                  step={5}
+                  onValueChange={([value]) => updateTerminalDraft('opacity', value)}
+                  aria-label="终端透明度"
+                />
+                <span className="w-9 text-right text-xs text-muted-foreground">{draft.terminal.opacity}%</span>
+              </div>
+            </SettingRow>
+            <SettingRow label="GPU 硬件加速" description="使用显卡渲染界面，出现花屏或闪烁时可关闭，重启应用后生效。">
+              <Switch checked={draft.gpuAcceleration} onCheckedChange={value => updateDraft('gpuAcceleration', value)} aria-label="GPU 硬件加速" />
             </SettingRow>
           </TabsContent>
 

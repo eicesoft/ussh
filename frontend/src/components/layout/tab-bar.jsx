@@ -75,7 +75,7 @@ export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onTogg
   return (
     <TooltipProvider delayDuration={300}>
       <div
-        className="flex min-w-0 select-none border-b border-border bg-muted"
+        className="app-drag flex min-w-0 select-none border-b border-border bg-muted"
         style={{ height: 'var(--density-tab-height)' }}
       >
         <div className="relative min-w-0 flex-1">
@@ -90,7 +90,7 @@ export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onTogg
               const trigger = (
                 <div
                   className={cn(
-                    'group relative flex h-full max-w-[240px] shrink-0 cursor-pointer items-center gap-2 border-r border-border/70 text-xs transition-colors',
+                    'app-no-drag group relative flex h-full max-w-[240px] shrink-0 cursor-pointer select-none items-center gap-2 border-r border-border/70 text-xs transition-colors',
                     active
                       ? 'bg-background font-medium text-foreground before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:bg-primary'
                       : 'text-muted-foreground hover:bg-background/50 hover:text-foreground',
@@ -158,28 +158,20 @@ export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onTogg
                       <TooltipContent
                         side="bottom"
                         align="start"
-                        className="w-56 bg-popover px-3 py-2.5 text-popover-foreground shadow-md"
+                        className="w-64 bg-popover px-3 py-2.5 text-popover-foreground shadow-md"
                       >
-                        <p className="truncate text-xs font-medium leading-none">
+                        <p className="truncate whitespace-nowrap text-xs font-medium leading-none">
                           {tab.name || tab.label}
                         </p>
-                        <div className="mt-2 space-y-1.5 text-[11px] leading-none">
-                          <div className="flex items-center justify-between gap-4">
-                            <span className="text-muted-foreground">主机</span>
-                            <span className="truncate">{tab.host || '—'}:{tab.port || 22}</span>
-                          </div>
-                          <div className="flex items-center justify-between gap-4">
-                            <span className="text-muted-foreground">用户</span>
-                            <span className="truncate">{tab.username || '—'}</span>
-                          </div>
-                          <div className="flex items-center justify-between gap-4">
-                            <span className="text-muted-foreground">认证</span>
-                            <span>{authText[tab.authType] ?? '—'}</span>
-                          </div>
-                          <div className="flex items-center justify-between gap-4">
-                            <span className="text-muted-foreground">状态</span>
-                            <span>{statusText[tab.status] ?? tab.status}</span>
-                          </div>
+                        <div className="mt-2 grid grid-cols-[2rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-[11px] leading-none">
+                          <span className="text-muted-foreground">主机</span>
+                          <span className="truncate whitespace-nowrap">{tab.host || '—'}:{tab.port || 22}</span>
+                          <span className="text-muted-foreground">用户</span>
+                          <span className="truncate whitespace-nowrap">{tab.username || '—'}</span>
+                          <span className="text-muted-foreground">认证</span>
+                          <span className="truncate whitespace-nowrap">{authText[tab.authType] ?? '—'}</span>
+                          <span className="text-muted-foreground">状态</span>
+                          <span className="truncate whitespace-nowrap">{statusText[tab.status] ?? tab.status}</span>
                         </div>
                       </TooltipContent>
                     </Tooltip>
@@ -205,6 +197,16 @@ export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onTogg
                 </DropdownMenu>
               );
             })}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="app-no-drag ml-1.5 h-full shrink-0 rounded-none p-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
+              style={{ width: 'var(--density-tab-control-size)' }}
+              onClick={onNew}
+              aria-label="临时连接"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
           </div>
           {hasOverflow && (
             <span className="pointer-events-none absolute inset-x-1 bottom-0 h-px overflow-hidden rounded-full bg-border/70">
@@ -215,16 +217,6 @@ export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onTogg
             </span>
           )}
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-full shrink-0 rounded-none border-l border-border p-0 text-muted-foreground hover:bg-background/60 hover:text-foreground"
-          style={{ width: 'var(--density-tab-control-size)' }}
-          onClick={onNew}
-          aria-label="临时连接"
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
       </div>
     </TooltipProvider>
   );

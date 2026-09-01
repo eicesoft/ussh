@@ -58,6 +58,10 @@ export function SetCredential(arg1, arg2) {
   return window['go']['main']['App']['SetCredential'](arg1, arg2);
 }
 
+export function SetGpuAcceleration(arg1) {
+  return window['go']['main']['App']['SetGpuAcceleration'](arg1);
+}
+
 export function UpdateSSHLink(arg1, arg2, arg3) {
   return window['go']['main']['App']['UpdateSSHLink'](arg1, arg2, arg3);
 }

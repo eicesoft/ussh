@@ -30,4 +30,6 @@ export function SendInput(arg1:string,arg2:string):Promise<void>;
 
 export function SetCredential(arg1:number,arg2:main.SavedCredential):Promise<void>;
 
+export function SetGpuAcceleration(arg1:boolean):Promise<void>;
+
 export function UpdateSSHLink(arg1:number,arg2:number,arg3:main.SavedNode):Promise<main.SavedNode>;

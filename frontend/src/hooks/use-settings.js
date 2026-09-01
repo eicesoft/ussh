@@ -1,20 +1,25 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTheme } from './use-theme';
+import { api } from '@/lib/api';
 
 const STORAGE_KEY = 'ussh-settings';
 const DEFAULT_SETTINGS = {
   density: 'compact',
+  gpuAcceleration: true,
   terminal: {
     fontSize: 13,
     cursorBlink: true,
     copyOnSelect: false,
     rightClickPaste: false,
     scrollback: 5000,
+    opacity: 100,
   },
 };
 const DENSITIES = ['compact', 'default', 'comfortable'];
 const FONT_SIZES = [12, 13, 14, 15, 16];
 const SCROLLBACK_VALUES = [1000, 5000, 10000, 20000];
+const MIN_OPACITY = 10;
+const MAX_OPACITY = 100;
 
 function readSettings() {
   try {
@@ -22,6 +27,7 @@ function readSettings() {
     const terminal = stored.terminal || {};
     return {
       density: DENSITIES.includes(stored.density) ? stored.density : DEFAULT_SETTINGS.density,
+      gpuAcceleration: typeof stored.gpuAcceleration === 'boolean' ? stored.gpuAcceleration : DEFAULT_SETTINGS.gpuAcceleration,
       terminal: {
         fontSize: FONT_SIZES.includes(terminal.fontSize) ? terminal.fontSize : DEFAULT_SETTINGS.terminal.fontSize,
         cursorBlink: typeof terminal.cursorBlink === 'boolean' ? terminal.cursorBlink : DEFAULT_SETTINGS.terminal.cursorBlink,
@@ -30,6 +36,10 @@ function readSettings() {
         scrollback: SCROLLBACK_VALUES.includes(terminal.scrollback)
           ? terminal.scrollback
           : DEFAULT_SETTINGS.terminal.scrollback,
+        opacity:
+          typeof terminal.opacity === 'number' && Number.isFinite(terminal.opacity)
+            ? Math.min(MAX_OPACITY, Math.max(MIN_OPACITY, Math.round(terminal.opacity)))
+            : DEFAULT_SETTINGS.terminal.opacity,
       },
     };
   } catch (_) {
@@ -49,8 +59,12 @@ export function useSettings() {
     next => {
       setSettings(next);
       setTheme(next.theme);
+      // GPU 开关由 Go 端在窗口创建时读取，这里只在变化时落盘，重启后生效。
+      if (next.gpuAcceleration !== settings.gpuAcceleration) {
+        api.setGpuAcceleration(Boolean(next.gpuAcceleration)).catch(() => {});
+      }
     },
-    [setTheme],
+    [setTheme, settings.gpuAcceleration],
   );
 
   return {

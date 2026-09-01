@@ -49,6 +49,9 @@ export const api = {
   async pickPrivateKeyFile() {
     return appApi()?.PickPrivateKeyFile();
   },
+  async setGpuAcceleration(enabled) {
+    return appApi()?.SetGpuAcceleration(enabled);
+  },
 };
 
 export function onTerminalOutput(handler) {

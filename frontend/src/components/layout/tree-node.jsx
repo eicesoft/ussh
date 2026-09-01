@@ -16,7 +16,7 @@ export function TreeNode({ tab, active, onSelect }) {
       onClick={() => onSelect(tab.id)}
       title={tab.label}
       className={cn(
-        'h-7 w-full justify-start gap-2 px-2 text-xs font-normal',
+        'app-no-drag h-7 w-full justify-start gap-2 px-2 text-xs font-normal',
         active && 'bg-accent text-accent-foreground font-medium',
       )}
     >

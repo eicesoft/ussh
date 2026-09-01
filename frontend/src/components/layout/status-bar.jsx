@@ -19,7 +19,7 @@ function ThemeIcon({ resolved }) {
   return <Monitor className="h-3.5 w-3.5" />;
 }
 
-export function StatusBar({ activeTab, globalStatus, onDisconnect }) {
+export function StatusBar({ activeTab, activeConnectionCount, globalStatus, onDisconnect }) {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const connected = activeTab?.status === 'connected';
 
@@ -31,6 +31,8 @@ export function StatusBar({ activeTab, globalStatus, onDisconnect }) {
           connected ? 'bg-primary shadow-[0_0_0_3px_hsl(var(--primary)/0.18)]' : 'bg-muted-foreground',
         )}
       />
+      <span className="shrink-0">{activeConnectionCount} 个活动会话</span>
+      <Separator orientation="vertical" className="mx-1 h-3" />
       <span className="truncate">{globalStatus}</span>
       <span className="ml-auto truncate">{connected ? activeTab.label : '未连接'}</span>
 

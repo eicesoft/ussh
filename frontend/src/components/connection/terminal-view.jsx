@@ -22,7 +22,9 @@ export function TerminalView({ tab, onSend, onResize, onFocus, onTermReady, term
       cursorBlink: terminalSettings?.cursorBlink ?? true,
       fontFamily: 'Menlo, Consolas, "Courier New", monospace',
       fontSize: terminalSettings?.fontSize ?? 13,
-      theme: { background: '#0b1220', foreground: '#e2e8f0' },
+      // 画布背景完全透明：透明度由外层终端容器统一承担，文字保持不透明。
+      theme: { background: '#0b122000', foreground: '#e2e8f0' },
+      allowTransparency: true,
       allowProposedApi: true,
       scrollback: terminalSettings?.scrollback ?? 5000,
       convertEol: false,

@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Copy, FolderPlus, Link2, Terminal, Pencil, ExternalLink, Trash2, Settings } from 'lucide-react';
+import { Copy, FolderPlus, Link2, Terminal, Pencil, ExternalLink, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
@@ -20,7 +19,6 @@ export function ConnectionTree({
   onEditSaved,
   onCloneSaved,
   onDeleteSaved,
-  onOpenSettings,
 }) {
   const [rootDropping, setRootDropping] = useState(false);
   const connectionTabs = tabs.filter(tab => tab.kind !== 'dashboard');
@@ -32,29 +30,10 @@ export function ConnectionTree({
   return (
     <TooltipProvider delayDuration={300}>
       <aside
-        className="flex h-full flex-col select-none border-r border-border bg-secondary text-secondary-foreground"
+        className="flex h-full flex-col select-none bg-secondary text-secondary-foreground"
         aria-label="连接管理"
       >
-        <div className="flex items-center gap-2 px-3 py-3 text-sm font-semibold tracking-tight">
-          <span className="font-mono text-muted-foreground">{'>_'}</span>
-          <span>uSSH</span>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="ml-auto h-6 w-6"
-                onClick={onOpenSettings}
-                aria-label="软件设置"
-              >
-                <Settings className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">软件设置</TooltipContent>
-          </Tooltip>
-        </div>
-
-        <ScrollArea className="mt-3 flex-1 px-3">
+        <ScrollArea className="app-drag flex-1 px-3 pt-3">
           <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             连接
           </div>
@@ -63,7 +42,7 @@ export function ConnectionTree({
               <TreeNode key={tab.id} tab={tab} active={tab.id === activeId} onSelect={onSelect} />
             ))
           ) : (
-            <p className="px-2 py-1 text-xs text-muted-foreground">暂无活动连接</p>
+            <p className="app-no-drag px-2 py-1 text-xs text-muted-foreground">暂无活动连接</p>
           )}
 
           {inactiveSessions.length > 0 && (
@@ -79,7 +58,7 @@ export function ConnectionTree({
 
           <div className="mb-1 mt-3 flex items-center justify-between px-1">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">本地</span>
-            <div className="flex items-center gap-0.5">
+            <div className="app-no-drag flex items-center gap-0.5">
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-5 w-5" onClick={onAddFolder}>
@@ -99,7 +78,7 @@ export function ConnectionTree({
             </div>
           </div>
           {nodes.length === 0 ? (
-            <p className="px-2 py-1 text-xs text-muted-foreground">添加常用 SSH 连接</p>
+            <p className="app-no-drag px-2 py-1 text-xs text-muted-foreground">添加常用 SSH 连接</p>
           ) : (
             <>
               {folders.map(folder => (
@@ -164,16 +143,6 @@ export function ConnectionTree({
           )}
         </ScrollArea>
 
-        <Separator />
-        <div className="flex h-7 items-center gap-2 px-3 text-xs text-muted-foreground">
-          <span
-            className={
-              'h-2 w-2 shrink-0 rounded-full ' +
-              (activeSessions.length ? 'bg-primary shadow-[0_0_0_3px_hsl(var(--primary)/0.18)]' : 'bg-muted-foreground')
-            }
-          />
-          {activeSessions.length} 个活动会话
-        </div>
       </aside>
     </TooltipProvider>
   );
@@ -222,7 +191,7 @@ function SavedRootNode({ node, onOpen, onEdit, onClone, onDelete }) {
           event.preventDefault();
           setContextMenu({ open: true, x: event.clientX, y: event.clientY });
         }}
-        className="group relative flex h-7 cursor-grab items-center gap-2 rounded-md px-2 text-xs font-normal text-secondary-foreground hover:bg-accent active:cursor-grabbing"
+        className="app-no-drag group relative flex h-7 cursor-grab items-center gap-2 rounded-md px-2 text-xs font-normal text-secondary-foreground hover:bg-accent active:cursor-grabbing"
         title="双击连接"
       >
         <Terminal className="h-3.5 w-3.5 shrink-0 text-primary/70" />
@@ -249,7 +218,7 @@ function SavedRootNode({ node, onOpen, onEdit, onClone, onDelete }) {
         <div
           ref={menuRef}
           style={{ position: 'fixed', left: contextMenu.x, top: contextMenu.y, zIndex: 50 }}
-          className="min-w-[9rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95"
+          className="app-no-drag min-w-[9rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95"
         >
           <div
             role="menuitem"

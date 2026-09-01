@@ -2,18 +2,20 @@ import { useCallback, useState } from 'react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import { ConnectionTree } from './connection-tree';
 import { TabBar } from './tab-bar';
-import { UtilityRail } from './utility-rail';
 import { UtilityPanel } from './utility-panel';
 import { StatusBar } from './status-bar';
 import { ConnectionForm } from '@/components/connection/connection-form';
 import { TerminalView } from '@/components/connection/terminal-view';
+import { TerminalActions } from '@/components/connection/terminal-actions';
 import { SavedLinkDialog } from '@/components/connection/saved-link-dialog';
 import { NewFolderDialog } from '@/components/connection/new-folder-dialog';
 import { ConfirmDeleteDialog } from '@/components/connection/confirm-delete-dialog';
+import { SettingsDialog } from '@/components/settings/settings-dialog';
 import { ConnectionDashboard } from '@/components/dashboard/connection-dashboard';
 import { useTabs } from '@/hooks/use-tabs';
 import { useSavedNodes } from '@/hooks/use-saved-nodes';
 import { useTerminalEvents } from '@/hooks/use-terminal-event';
+import { useSettings } from '@/hooks/use-settings';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
@@ -46,7 +48,9 @@ export function Shell() {
     setCredential,
     pickPrivateKeyFile,
   } = useSavedNodes();
+  const { settings, applySettings } = useSettings();
   const [globalStatus, setGlobalStatus] = useState('准备就绪');
+  const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [showSavedLinkDialog, setShowSavedLinkDialog] = useState(false);
   const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
   const [editingNode, setEditingNode] = useState(null);
@@ -139,6 +143,9 @@ export function Shell() {
   const submitSavedLink = useCallback(
     async payload => {
       try {
+        const cred = payload.credential || {};
+        // 所有槽位都是 undefined = 凭据无变化，不触发密钥环读写
+        const credentialChanged = Object.values(cred).some(v => v !== undefined);
         if (editingNode) {
           await updateSSHLink(editingNode.id, payload.parentId, {
             name: payload.name,
@@ -147,7 +154,9 @@ export function Shell() {
             username: payload.username,
             authType: payload.authType,
           });
-          await setCredential(editingNode.id, payload.credential || {});
+          if (credentialChanged) {
+            await setCredential(editingNode.id, cred);
+          }
         } else {
           const created = await createSSHLink(payload.parentId, {
             name: payload.name,
@@ -156,8 +165,8 @@ export function Shell() {
             username: payload.username,
             authType: payload.authType,
           });
-          if (created?.id) {
-            await setCredential(created.id, payload.credential || {});
+          if (created?.id && credentialChanged) {
+            await setCredential(created.id, cred);
           }
         }
         closeSavedDialog();
@@ -173,6 +182,12 @@ export function Shell() {
     async (tabId, payload) => {
       buffersRef.current[tabId] = '';
       setTabStatus(tabId, 'connecting');
+      updateTab(tabId, {
+        host: payload.host,
+        port: payload.port,
+        username: payload.username,
+        authType: payload.authType,
+      });
       const term = termsRef.current[tabId];
       if (term) term.reset();
       const size = term
@@ -182,7 +197,9 @@ export function Shell() {
         const message = await api.connect(tabId, payload, size);
         setGlobalStatus(message);
         setTabStatus(tabId, 'connected');
-        updateTab(tabId, { label: `${payload.username || 'user'}@${payload.host}` });
+        updateTab(tabId, tab => ({
+          label: tab.name || `${payload.username || 'user'}@${payload.host}`,
+        }));
       } catch (e) {
         setGlobalStatus(`连接失败：${e}`);
         setTabStatus(tabId, 'idle');
@@ -205,7 +222,7 @@ export function Shell() {
         authType: node.authType || 'password',
         savedNodeId: node.id,
       };
-      updateTab(id, { label: node.name, sourceNodeId: node.id, form });
+      updateTab(id, { label: node.name, name: node.name, sourceNodeId: node.id, form });
       handleConnect(id, form);
     },
     [newTab, updateTab, handleConnect],
@@ -261,8 +278,11 @@ export function Shell() {
     (activeTab.status === 'connected' || activeTab.status === 'connecting');
 
   return (
-    <main className="h-screen overflow-hidden bg-background text-foreground">
-      <Group orientation="horizontal" className="h-full w-full">
+    <main
+      className="h-screen overflow-hidden bg-background text-foreground"
+      data-density={settings.density}
+    >
+      <Group orientation="horizontal" className="h-full min-h-0 w-full overflow-hidden">
         <Panel
           defaultSize={240}
           minSize={200}
@@ -281,11 +301,12 @@ export function Shell() {
             onEditSaved={handleEditSaved}
             onCloneSaved={handleCloneSaved}
             onDeleteSaved={handleDeleteSaved}
+            onOpenSettings={() => setShowSettingsDialog(true)}
           />
         </Panel>
-        <Separator className="w-px bg-border transition-colors hover:bg-primary data-[separator=dragging]:bg-primary" />
+        <Separator className="w-px cursor-col-resize bg-transparent transition-colors duration-150 hover:bg-primary/60 data-[separator=dragging]:bg-primary" />
         <Panel minSize={460}>
-          <section className="flex h-full min-w-0 flex-col">
+          <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
             <TabBar
               tabs={tabs}
               activeId={activeId}
@@ -295,11 +316,11 @@ export function Shell() {
               onTogglePinned={toggleTabPinned}
               onNew={newTab}
             />
-            <Group orientation="horizontal" className="flex-1">
+            <Group orientation="horizontal" className="min-h-0 flex-1">
               <Panel minSize={320}>
                 <div
                   className={cn(
-                    'flex h-full min-h-0 overflow-auto bg-background p-5',
+                    'relative flex h-full min-h-0 overflow-auto bg-background p-5',
                     terminalActive && 'overflow-hidden bg-[#0b1220] p-0',
                     activeTab.kind === 'dashboard' && 'overflow-hidden p-0',
                   )}
@@ -307,14 +328,18 @@ export function Shell() {
                   {activeTab.kind === 'dashboard' ? (
                     <ConnectionDashboard nodes={nodes} onConnect={connectSavedLink} onNew={newTab} />
                   ) : terminalActive ? (
-                    <TerminalView
-                      key={activeTab.id}
-                      tab={activeTab}
-                      onSend={onActiveSend}
-                      onResize={onActiveResize}
-                      onFocus={() => {}}
-                      onTermReady={onActiveTermReady}
-                    />
+                    <>
+                      <TerminalView
+                        key={activeTab.id}
+                        tab={activeTab}
+                        onSend={onActiveSend}
+                        onResize={onActiveResize}
+                        onFocus={() => {}}
+                        onTermReady={onActiveTermReady}
+                        terminalSettings={settings.terminal}
+                      />
+                      <TerminalActions active={activeUtility} onToggle={setActiveUtility} />
+                    </>
                   ) : (
                     <ConnectionForm
                       initialForm={activeTab.form}
@@ -324,9 +349,9 @@ export function Shell() {
                   )}
                 </div>
               </Panel>
-              {activeUtility && (
+              {terminalActive && activeUtility && (
                 <>
-                  <Separator className="w-px bg-border transition-colors hover:bg-primary data-[separator=dragging]:bg-primary" />
+                  <Separator className="w-px cursor-col-resize bg-transparent transition-colors duration-150 hover:bg-primary/60 data-[separator=dragging]:bg-primary" />
                   <Panel
                     defaultSize={240}
                     minSize={180}
@@ -337,9 +362,6 @@ export function Shell() {
                   </Panel>
                 </>
               )}
-              <Panel defaultSize={40} minSize={40} maxSize={40} disabled>
-                <UtilityRail active={activeUtility} onToggle={setActiveUtility} />
-              </Panel>
             </Group>
             <StatusBar
               activeTab={activeTab}
@@ -349,6 +371,13 @@ export function Shell() {
           </section>
         </Panel>
       </Group>
+
+      <SettingsDialog
+        open={showSettingsDialog}
+        onClose={() => setShowSettingsDialog(false)}
+        settings={settings}
+        onSave={applySettings}
+      />
 
       <SavedLinkDialog
         open={showSavedLinkDialog || editingNode !== null}

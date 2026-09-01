@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { LayoutDashboard, Pin, PinOff, Plus, Unplug, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -15,6 +16,19 @@ const dotColor = {
   connecting: 'bg-amber-500',
   connected: 'bg-primary',
   closed: 'bg-destructive',
+};
+
+const statusText = {
+  idle: '未连接',
+  connecting: '连接中…',
+  connected: '已连接',
+  closed: '已断开',
+};
+
+const authText = {
+  password: '密码',
+  key: '密钥',
+  keyfile: '密钥文件',
 };
 
 export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onTogglePinned, onNew }) {
@@ -59,108 +73,159 @@ export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onTogg
   const thumbOffset = hasOverflow ? (scrollMetrics.left / scrollMetrics.width) * 100 : 0;
 
   return (
-    <div className="flex h-9 min-w-0 select-none border-b border-border bg-muted">
-      <div className="relative min-w-0 flex-1">
-        <div
-          ref={scrollRef}
-          className="tab-bar-scroll flex h-full min-w-0 overflow-x-auto"
-          onScroll={updateScrollMetrics}
-          onWheel={handleWheel}
-        >
-          {tabs.map(tab => {
-            const active = tab.id === activeId;
-            return (
-              <DropdownMenu
-                key={tab.id}
-                open={contextTabId === tab.id}
-                onOpenChange={open => !open && setContextTabId(null)}
-              >
-                <DropdownMenuTrigger asChild>
-                  <div
-                    className={cn(
-                      'group relative flex h-full min-w-[140px] max-w-[240px] shrink-0 cursor-pointer items-center gap-2 border-r border-border/70 px-3 text-xs transition-colors',
-                      active
-                        ? 'bg-background font-medium text-foreground before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:bg-primary'
-                        : 'text-muted-foreground hover:bg-background/50 hover:text-foreground',
-                      tab.pinned && 'min-w-[118px]',
-                    )}
-                    onClick={event => {
-                      onSelect(tab.id);
-                      event.preventDefault();
-                    }}
-                    onContextMenu={event => {
-                      event.preventDefault();
-                      onSelect(tab.id);
-                      setContextTabId(tab.id);
-                    }}
-                    title={tab.label}
-                  >
-                    {tab.kind === 'dashboard' ? (
-                      <LayoutDashboard className="h-3.5 w-3.5 shrink-0 text-primary" />
-                    ) : (
-                      <span
-                        className={cn(
-                          'h-2 w-2 shrink-0 rounded-full',
-                          dotColor[tab.status] ?? 'bg-muted-foreground',
-                        )}
-                      />
-                    )}
-                    <span className="truncate">{tab.label}</span>
-                    {tab.pinned && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />}
-                    {tab.closable && (
-                      <button
-                        className="ml-auto flex h-5 w-5 items-center justify-center rounded-sm text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
-                        onClick={e => {
-                          e.stopPropagation();
-                          onClose(tab.id);
-                        }}
-                        aria-label="关闭标签"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" side="bottom" className="min-w-[9rem]">
-                  <DropdownMenuItem
-                    disabled={tab.status !== 'connected' && tab.status !== 'connecting'}
-                    onSelect={() => onDisconnect(tab)}
-                  >
-                    <Unplug className="h-3.5 w-3.5" />
-                    断开
-                  </DropdownMenuItem>
-                  <DropdownMenuItem disabled={!tab.closable} onSelect={() => onClose(tab.id)}>
-                    <X className="h-3.5 w-3.5" />
-                    关闭
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onSelect={() => onTogglePinned(tab.id)}>
-                    {tab.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
-                    {tab.pinned ? '取消固定' : '固定'}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            );
-          })}
-        </div>
-        {hasOverflow && (
-          <span className="pointer-events-none absolute inset-x-1 bottom-0 h-px overflow-hidden rounded-full bg-border/70">
-            <span
-              className="absolute inset-y-0 rounded-full bg-muted-foreground/70 transition-transform duration-100"
-              style={{ left: `${thumbOffset}%`, width: `${thumbWidth}%` }}
-            />
-          </span>
-        )}
-      </div>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-full w-9 shrink-0 rounded-none border-l border-border p-0 text-muted-foreground hover:bg-background/60 hover:text-foreground"
-        onClick={onNew}
-        aria-label="临时连接"
+    <TooltipProvider delayDuration={300}>
+      <div
+        className="flex min-w-0 select-none border-b border-border bg-muted"
+        style={{ height: 'var(--density-tab-height)' }}
       >
-        <Plus className="h-4 w-4" />
-      </Button>
-    </div>
+        <div className="relative min-w-0 flex-1">
+          <div
+            ref={scrollRef}
+            className="tab-bar-scroll flex h-full min-w-0 overflow-x-auto"
+            onScroll={updateScrollMetrics}
+            onWheel={handleWheel}
+          >
+            {tabs.map(tab => {
+              const active = tab.id === activeId;
+              const trigger = (
+                <div
+                  className={cn(
+                    'group relative flex h-full max-w-[240px] shrink-0 cursor-pointer items-center gap-2 border-r border-border/70 text-xs transition-colors',
+                    active
+                      ? 'bg-background font-medium text-foreground before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:bg-primary'
+                      : 'text-muted-foreground hover:bg-background/50 hover:text-foreground',
+                  )}
+                  style={{
+                    minWidth: tab.pinned
+                      ? 'var(--density-tab-pinned-min-width)'
+                      : 'var(--density-tab-min-width)',
+                    paddingInline: 'var(--density-tab-padding-x)',
+                  }}
+                  onClick={event => {
+                    onSelect(tab.id);
+                    event.preventDefault();
+                  }}
+                  onContextMenu={event => {
+                    event.preventDefault();
+                    onSelect(tab.id);
+                    setContextTabId(tab.id);
+                  }}
+                  title={tab.kind === 'dashboard' ? tab.label : undefined}
+                >
+                  {tab.kind === 'dashboard' ? (
+                    <LayoutDashboard
+                      className="shrink-0 text-primary"
+                      style={{ width: 'var(--density-tab-icon-size)', height: 'var(--density-tab-icon-size)' }}
+                    />
+                  ) : (
+                    <span
+                      className={cn(
+                        'h-2 w-2 shrink-0 rounded-full',
+                        dotColor[tab.status] ?? 'bg-muted-foreground',
+                      )}
+                    />
+                  )}
+                  <span className="truncate">{tab.label}</span>
+                  {tab.pinned && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />}
+                  {tab.closable && (
+                    <button
+                      className="ml-auto flex items-center justify-center rounded-sm text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
+                      style={{ width: 'var(--density-tab-control-size)', height: 'var(--density-tab-control-size)' }}
+                      onClick={e => {
+                        e.stopPropagation();
+                        onClose(tab.id);
+                      }}
+                      aria-label="关闭标签"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              );
+              return (
+                <DropdownMenu
+                  key={tab.id}
+                  open={contextTabId === tab.id}
+                  onOpenChange={open => !open && setContextTabId(null)}
+                >
+                  {tab.kind === 'dashboard' ? (
+                    <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+                  ) : (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="bottom"
+                        align="start"
+                        className="w-56 bg-popover px-3 py-2.5 text-popover-foreground shadow-md"
+                      >
+                        <p className="truncate text-xs font-medium leading-none">
+                          {tab.name || tab.label}
+                        </p>
+                        <div className="mt-2 space-y-1.5 text-[11px] leading-none">
+                          <div className="flex items-center justify-between gap-4">
+                            <span className="text-muted-foreground">主机</span>
+                            <span className="truncate">{tab.host || '—'}:{tab.port || 22}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-4">
+                            <span className="text-muted-foreground">用户</span>
+                            <span className="truncate">{tab.username || '—'}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-4">
+                            <span className="text-muted-foreground">认证</span>
+                            <span>{authText[tab.authType] ?? '—'}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-4">
+                            <span className="text-muted-foreground">状态</span>
+                            <span>{statusText[tab.status] ?? tab.status}</span>
+                          </div>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                  <DropdownMenuContent align="start" side="bottom" className="min-w-[9rem]">
+                    <DropdownMenuItem
+                      disabled={tab.status !== 'connected' && tab.status !== 'connecting'}
+                      onSelect={() => onDisconnect(tab)}
+                    >
+                      <Unplug className="h-3.5 w-3.5" />
+                      断开
+                    </DropdownMenuItem>
+                    <DropdownMenuItem disabled={!tab.closable} onSelect={() => onClose(tab.id)}>
+                      <X className="h-3.5 w-3.5" />
+                      关闭
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={() => onTogglePinned(tab.id)}>
+                      {tab.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+                      {tab.pinned ? '取消固定' : '固定'}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              );
+            })}
+          </div>
+          {hasOverflow && (
+            <span className="pointer-events-none absolute inset-x-1 bottom-0 h-px overflow-hidden rounded-full bg-border/70">
+              <span
+                className="absolute inset-y-0 rounded-full bg-muted-foreground/70 transition-transform duration-100"
+                style={{ left: `${thumbOffset}%`, width: `${thumbWidth}%` }}
+              />
+            </span>
+          )}
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-full shrink-0 rounded-none border-l border-border p-0 text-muted-foreground hover:bg-background/60 hover:text-foreground"
+          style={{ width: 'var(--density-tab-control-size)' }}
+          onClick={onNew}
+          aria-label="临时连接"
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
+      </div>
+    </TooltipProvider>
   );
 }

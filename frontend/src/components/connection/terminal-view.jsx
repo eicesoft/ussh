@@ -2,23 +2,29 @@ import { useEffect, useRef, useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { ClipboardGetText } from '../../../wailsjs/runtime/runtime';
 
-export function TerminalView({ tab, onSend, onResize, onFocus, onTermReady }) {
+export function TerminalView({ tab, onSend, onResize, onFocus, onTermReady, terminalSettings }) {
   const hostRef = useRef(null);
   const termRef = useRef(null);
   const fitRef = useRef(null);
   const scrollTimerRef = useRef(null);
+  const terminalSettingsRef = useRef(terminalSettings);
   const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    terminalSettingsRef.current = terminalSettings;
+  }, [terminalSettings]);
 
   useEffect(() => {
     if (!hostRef.current) return;
     const term = new Terminal({
-      cursorBlink: true,
+      cursorBlink: terminalSettings?.cursorBlink ?? true,
       fontFamily: 'Menlo, Consolas, "Courier New", monospace',
-      fontSize: 13,
+      fontSize: terminalSettings?.fontSize ?? 13,
       theme: { background: '#0b1220', foreground: '#e2e8f0' },
       allowProposedApi: true,
-      scrollback: 5000,
+      scrollback: terminalSettings?.scrollback ?? 5000,
       convertEol: false,
     });
     const fit = new FitAddon();
@@ -44,6 +50,28 @@ export function TerminalView({ tab, onSend, onResize, onFocus, onTermReady }) {
       }, 700);
     };
     viewport?.addEventListener('scroll', showScrollIndicator, { passive: true });
+    const copySelection = () => {
+      if (!terminalSettingsRef.current?.copyOnSelect || !term.hasSelection()) return;
+      const clipboard = navigator.clipboard;
+      if (clipboard) clipboard.writeText(term.getSelection()).catch(() => {});
+    };
+    const pasteOnRightClick = event => {
+      if (!terminalSettingsRef.current?.rightClickPaste) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const readClipboard = typeof window.runtime?.ClipboardGetText === 'function'
+        ? ClipboardGetText()
+        : navigator.clipboard?.readText?.();
+      Promise.resolve(readClipboard)
+        .then(text => {
+          if (text) term.paste(text);
+        })
+        .catch(() => {})
+        .finally(() => term.focus());
+    };
+    const selectionDisposable = term.onSelectionChange(copySelection);
+    const screen = hostRef.current.querySelector('.xterm-screen');
+    screen?.addEventListener('contextmenu', pasteOnRightClick, true);
 
     setReady(true);
 
@@ -68,7 +96,9 @@ export function TerminalView({ tab, onSend, onResize, onFocus, onTermReady }) {
       ro.disconnect();
       window.removeEventListener('resize', fitTerminal);
       viewport?.removeEventListener('scroll', showScrollIndicator);
+      screen?.removeEventListener('contextmenu', pasteOnRightClick, true);
       window.clearTimeout(scrollTimerRef.current);
+      selectionDisposable.dispose();
       subscription.dispose();
       term.dispose();
       termRef.current = null;
@@ -76,6 +106,18 @@ export function TerminalView({ tab, onSend, onResize, onFocus, onTermReady }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab.id]);
+
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term || !terminalSettings) return;
+    term.options.cursorBlink = terminalSettings.cursorBlink;
+    term.options.fontSize = terminalSettings.fontSize;
+    term.options.scrollback = terminalSettings.scrollback;
+    try {
+      fitRef.current?.fit();
+      onResize({ columns: term.cols, rows: term.rows });
+    } catch (_) {}
+  }, [terminalSettings?.cursorBlink, terminalSettings?.fontSize, terminalSettings?.scrollback, onResize]);
 
   useEffect(() => {
     if (tab.buffer && termRef.current) {

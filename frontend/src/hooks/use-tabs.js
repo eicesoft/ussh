@@ -73,7 +73,9 @@ export function useTabs() {
   );
 
   const updateTab = useCallback((id, patch) => {
-    setTabs(prev => prev.map(t => (t.id === id ? { ...t, ...patch } : t)));
+    setTabs(prev =>
+      prev.map(t => (t.id === id ? { ...t, ...(typeof patch === 'function' ? patch(t) : patch) } : t)),
+    );
   }, []);
 
   const toggleTabPinned = useCallback(id => {

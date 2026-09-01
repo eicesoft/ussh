@@ -4,8 +4,9 @@
   flex: 1;
   min-width: 0;
   min-height: 0;
-  height: 100%;
-  width: 100%;
+  margin: 8px;
+  height: calc(100% - 16px);
+  width: calc(100% - 12px);
   overflow: hidden;
   background: #0b1220;
 }
@@ -24,6 +25,13 @@
 .terminal-host .xterm .xterm-accessibility-tree * {
   user-select: text !important;
   -webkit-user-select: text !important;
+}
+
+/* 原生选区仅作为输入来源：镜像 DOM 行与 canvas 单元格存在亚像素/行高漂移，
+   浏览器默认的选区背景会形成一层错位的"浮层"；真正的选区高亮由 xterm canvas 绘制。 */
+.terminal-host .xterm .xterm-accessibility-tree *::selection {
+  color: transparent;
+  background: transparent;
 }
 
 .terminal-host .xterm-viewport {

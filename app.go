@@ -111,17 +111,17 @@ func (a *App) Connect(tabId string, config ConnectionConfig, size TerminalSize) 
 		if err != nil {
 			return "", err
 		}
-		if cred.Password != "" {
-			config.Password = cred.Password
+		if cred.Password != nil && *cred.Password != "" {
+			config.Password = *cred.Password
 		}
-		if cred.PrivateKey != "" {
-			config.PrivateKey = cred.PrivateKey
+		if cred.PrivateKey != nil && *cred.PrivateKey != "" {
+			config.PrivateKey = *cred.PrivateKey
 		}
-		if cred.Passphrase != "" {
-			config.Passphrase = cred.Passphrase
+		if cred.Passphrase != nil && *cred.Passphrase != "" {
+			config.Passphrase = *cred.Passphrase
 		}
-		if cred.KeyFile != "" {
-			config.KeyFile = cred.KeyFile
+		if cred.KeyFile != nil && *cred.KeyFile != "" {
+			config.KeyFile = *cred.KeyFile
 		}
 		config.AuthType = authType
 	}
@@ -187,7 +187,7 @@ func (a *App) loadCredential(nodeID int64, authType string) (SavedCredential, er
 		if err != nil {
 			return cred, err
 		}
-		cred.Password = pwd
+		cred.Password = &pwd
 	case AuthKey:
 		key, err := getKeyring(base + ":privateKey")
 		if err != nil {
@@ -197,8 +197,8 @@ func (a *App) loadCredential(nodeID int64, authType string) (SavedCredential, er
 		if err != nil {
 			return cred, err
 		}
-		cred.PrivateKey = key
-		cred.Passphrase = phrase
+		cred.PrivateKey = &key
+		cred.Passphrase = &phrase
 	case AuthKeyFile:
 		path, err := getKeyring(base + ":keyFile")
 		if err != nil {
@@ -208,8 +208,8 @@ func (a *App) loadCredential(nodeID int64, authType string) (SavedCredential, er
 		if err != nil {
 			return cred, err
 		}
-		cred.KeyFile = path
-		cred.Passphrase = phrase
+		cred.KeyFile = &path
+		cred.Passphrase = &phrase
 	default:
 		return cred, fmt.Errorf("不支持的认证方式：%s", authType)
 	}

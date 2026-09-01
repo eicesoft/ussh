@@ -35,11 +35,12 @@ type CredentialView struct {
 
 // SavedCredential 是写入 keyring 的明文结构，仅在内存中存在；
 // 任何时候都不应被序列化或落盘。
+// 指针语义：nil = 保持该槽位不变；"" = 删除该槽位；非空 = 覆盖写入。
 type SavedCredential struct {
-	Password   string `json:"password"`
-	PrivateKey string `json:"privateKey"`
-	Passphrase string `json:"passphrase"`
-	KeyFile    string `json:"keyFile"`
+	Password   *string `json:"password,omitempty"`
+	PrivateKey *string `json:"privateKey,omitempty"`
+	Passphrase *string `json:"passphrase,omitempty"`
+	KeyFile    *string `json:"keyFile,omitempty"`
 }
 
 const (
@@ -354,7 +355,7 @@ func (a *App) GetCredential(nodeID int64) (CredentialView, error) {
 }
 
 // SetCredential 把整张凭证写入 keyring。
-// 每个字段独立槽位；空字符串表示"删除该槽位"。
+// 每个字段独立槽位；nil 表示"保持该槽位不变"，空字符串表示"删除该槽位"。
 func (a *App) SetCredential(nodeID int64, cred SavedCredential) error {
 	base := credentialAccount(nodeID)
 	if err := a.writeSlot(base+":password", cred.Password); err != nil {
@@ -372,12 +373,15 @@ func (a *App) SetCredential(nodeID int64, cred SavedCredential) error {
 	return nil
 }
 
-func (a *App) writeSlot(account, value string) error {
-	value = strings.TrimSpace(value)
-	if value == "" {
+func (a *App) writeSlot(account string, value *string) error {
+	if value == nil {
+		return nil
+	}
+	v := strings.TrimSpace(*value)
+	if v == "" {
 		return deleteKeyring(account)
 	}
-	return setKeyring(account, value)
+	return setKeyring(account, v)
 }
 
 // ClearCredential 清理某节点的所有 keyring 条目。

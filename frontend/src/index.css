@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 215 25% 18%;
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 18%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 18%;
+    --primary: 158 72% 35%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 215 25% 95%;
+    --secondary-foreground: 215 25% 27%;
+    --muted: 215 20% 96%;
+    --muted-foreground: 215 14% 46%;
+    --accent: 215 25% 92%;
+    --accent-foreground: 215 25% 18%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 215 22% 87%;
+    --input: 215 22% 87%;
+    --ring: 158 72% 35%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222 24% 9%;
+    --foreground: 210 20% 92%;
+    --card: 222 24% 11%;
+    --card-foreground: 210 20% 92%;
+    --popover: 222 24% 11%;
+    --popover-foreground: 210 20% 92%;
+    --primary: 158 64% 42%;
+    --primary-foreground: 222 47% 11%;
+    --secondary: 222 20% 16%;
+    --secondary-foreground: 210 20% 92%;
+    --muted: 222 20% 16%;
+    --muted-foreground: 215 14% 65%;
+    --accent: 222 20% 20%;
+    --accent-foreground: 210 20% 92%;
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 222 20% 22%;
+    --input: 222 20% 22%;
+    --ring: 158 64% 42%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html,
+  body,
+  #root {
+    margin: 0;
+    min-height: 100%;
+    height: 100%;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: Inter, "Segoe UI", Arial, sans-serif;
+  }
+  button,
+  input,
+  textarea,
+  select {
+    font-family: inherit;
+  }
+}
+
+/* 标签过多时保留滚动能力，但隐藏浏览器原生横向滚动条。 */
+.tab-bar-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.tab-bar-scroll::-webkit-scrollbar {
+  display: none;
+}

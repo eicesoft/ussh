@@ -40,6 +40,7 @@ export function Shell() {
     createSSHLink,
     moveNode,
     updateSSHLink,
+    cloneSSHLink,
     deleteSSHLink,
     getCredential,
     setCredential,
@@ -104,6 +105,18 @@ export function Shell() {
   const handleDeleteSaved = useCallback(node => {
     setDeletingNode(node);
   }, []);
+
+  const handleCloneSaved = useCallback(
+    async node => {
+      try {
+        const created = await cloneSSHLink(node.id);
+        setGlobalStatus(`已克隆「${created?.name || node.name}」`);
+      } catch (e) {
+        setGlobalStatus(`克隆失败：${e}`);
+      }
+    },
+    [cloneSSHLink],
+  );
 
   const submitDelete = useCallback(async () => {
     if (!deletingNode) return;
@@ -261,12 +274,12 @@ export function Shell() {
             activeId={activeId}
             nodes={nodes}
             onSelect={selectTab}
-            onNew={newTab}
             onOpenSaved={connectSavedLink}
             onAddFolder={handleAddFolder}
             onAddLink={() => setShowSavedLinkDialog(true)}
             onMoveNode={handleMoveNode}
             onEditSaved={handleEditSaved}
+            onCloneSaved={handleCloneSaved}
             onDeleteSaved={handleDeleteSaved}
           />
         </Panel>
@@ -280,7 +293,7 @@ export function Shell() {
               onClose={closeTab}
               onDisconnect={disconnectTab}
               onTogglePinned={toggleTabPinned}
-              onAddSaved={() => setShowSavedLinkDialog(true)}
+              onNew={newTab}
             />
             <Group orientation="horizontal" className="flex-1">
               <Panel minSize={320}>

@@ -17,7 +17,7 @@ const dotColor = {
   closed: 'bg-destructive',
 };
 
-export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onTogglePinned, onAddSaved }) {
+export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onTogglePinned, onNew }) {
   const scrollRef = useRef(null);
   const [contextTabId, setContextTabId] = useState(null);
   const [scrollMetrics, setScrollMetrics] = useState({ left: 0, width: 1, viewport: 1 });
@@ -156,8 +156,8 @@ export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onTogg
         variant="ghost"
         size="sm"
         className="h-full w-9 shrink-0 rounded-none border-l border-border p-0 text-muted-foreground hover:bg-background/60 hover:text-foreground"
-        onClick={onAddSaved}
-        aria-label="新增连接"
+        onClick={onNew}
+        aria-label="临时连接"
       >
         <Plus className="h-4 w-4" />
       </Button>

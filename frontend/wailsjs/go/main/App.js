@@ -6,6 +6,10 @@ export function ClearCredential(arg1) {
   return window['go']['main']['App']['ClearCredential'](arg1);
 }
 
+export function CloneSSHLink(arg1) {
+  return window['go']['main']['App']['CloneSSHLink'](arg1);
+}
+
 export function Connect(arg1, arg2, arg3) {
   return window['go']['main']['App']['Connect'](arg1, arg2, arg3);
 }

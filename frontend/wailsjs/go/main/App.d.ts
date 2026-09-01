@@ -4,6 +4,8 @@ import {main} from '../models';
 
 export function ClearCredential(arg1:number):Promise<void>;
 
+export function CloneSSHLink(arg1:number):Promise<main.SavedNode>;
+
 export function Connect(arg1:string,arg2:main.ConnectionConfig,arg3:main.TerminalSize):Promise<string>;
 
 export function CreateFolder(arg1:number,arg2:string):Promise<main.SavedNode>;

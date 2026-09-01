@@ -1,11 +1,10 @@
-import { Terminal, FileText, Settings } from 'lucide-react';
+import { Terminal, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 const items = [
   ['commands', '快捷命令', Terminal],
   ['files', '文件传输', FileText],
-  ['settings', '会话设置', Settings],
 ];
 
 export function UtilityRail({ active, onToggle }) {

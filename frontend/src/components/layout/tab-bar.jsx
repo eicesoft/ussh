@@ -119,7 +119,7 @@ export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onTogg
                     className={cn(
                       'app-no-drag group relative my-[4px] flex h-[calc(100%-8px)] max-w-[240px] shrink-0 cursor-pointer select-none items-center gap-2 rounded-[8px] text-xs transition-colors',
                       active
-                        ? 'bg-background font-semibold text-foreground shadow-sm ring-1 ring-inset ring-primary/30 after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full after:bg-primary dark:ring-primary/45'
+                        ? 'bg-background font-semibold text-foreground shadow-sm'
                         : 'text-[#6f6f75] hover:bg-[#eeeeF0] hover:text-[#2d2d31] dark:text-muted-foreground dark:hover:bg-background/50 dark:hover:text-foreground',
                     )}
                     style={{

@@ -404,7 +404,7 @@ export function Shell() {
           panelRef={connectionTreePanelRef}
           collapsible
           collapsedSize={0}
-          defaultSize={240}
+          defaultSize={280}
           minSize={200}
           maxSize={340}
           groupResizeBehavior="preserve-pixel-size"

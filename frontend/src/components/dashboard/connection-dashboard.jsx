@@ -54,7 +54,8 @@ export function ConnectionDashboard({ nodes, onConnect, onNew }) {
                   {group.links.map(link => (
                     <div
                       key={link.id}
-                      className="group rounded-lg border border-border bg-card p-4 text-left shadow-sm transition-all hover:border-primary/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="group cursor-pointer rounded-lg border border-border bg-card p-4 text-left shadow-sm transition-all hover:border-primary/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      onDoubleClick={() => onConnect(link)}
                     >
                       <div className="flex items-start gap-3">
                         <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
@@ -68,6 +69,7 @@ export function ConnectionDashboard({ nodes, onConnect, onNew }) {
                               size="icon"
                               className="h-7 w-7 shrink-0"
                               onClick={() => onConnect(link)}
+                              onDoubleClick={event => event.stopPropagation()}
                               aria-label="终端"
                             >
                               <Terminal className="h-3.5 w-3.5" />

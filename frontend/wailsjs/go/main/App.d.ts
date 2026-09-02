@@ -28,6 +28,8 @@ export function ResizeTerminal(arg1:string,arg2:main.TerminalSize):Promise<void>
 
 export function SendInput(arg1:string,arg2:string):Promise<void>;
 
+export function SetBackdropType(arg1:string):Promise<void>;
+
 export function SetCredential(arg1:number,arg2:main.SavedCredential):Promise<void>;
 
 export function SetGpuAcceleration(arg1:boolean):Promise<void>;

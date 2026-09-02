@@ -6,6 +6,7 @@ const STORAGE_KEY = 'ussh-settings';
 const DEFAULT_SETTINGS = {
   density: 'compact',
   gpuAcceleration: true,
+  backdropType: 'acrylic',
   terminal: {
     fontSize: 13,
     cursorBlink: true,
@@ -20,6 +21,7 @@ const FONT_SIZES = [12, 13, 14, 15, 16];
 const SCROLLBACK_VALUES = [1000, 5000, 10000, 20000];
 const MIN_OPACITY = 10;
 const MAX_OPACITY = 100;
+const BACKDROP_TYPES = ['none', 'mica', 'acrylic'];
 
 function readSettings() {
   try {
@@ -28,6 +30,7 @@ function readSettings() {
     return {
       density: DENSITIES.includes(stored.density) ? stored.density : DEFAULT_SETTINGS.density,
       gpuAcceleration: typeof stored.gpuAcceleration === 'boolean' ? stored.gpuAcceleration : DEFAULT_SETTINGS.gpuAcceleration,
+      backdropType: BACKDROP_TYPES.includes(stored.backdropType) ? stored.backdropType : DEFAULT_SETTINGS.backdropType,
       terminal: {
         fontSize: FONT_SIZES.includes(terminal.fontSize) ? terminal.fontSize : DEFAULT_SETTINGS.terminal.fontSize,
         cursorBlink: typeof terminal.cursorBlink === 'boolean' ? terminal.cursorBlink : DEFAULT_SETTINGS.terminal.cursorBlink,
@@ -59,12 +62,15 @@ export function useSettings() {
     next => {
       setSettings(next);
       setTheme(next.theme);
-      // GPU 开关由 Go 端在窗口创建时读取，这里只在变化时落盘，重启后生效。
+      // GPU 开关与背景材质由 Go 端保存，这里只在变化时落盘：GPU 重启生效，macOS 背景材质即时生效。
       if (next.gpuAcceleration !== settings.gpuAcceleration) {
         api.setGpuAcceleration(Boolean(next.gpuAcceleration)).catch(() => {});
       }
+      if (next.backdropType !== settings.backdropType) {
+        api.setBackdropType(next.backdropType).catch(() => {});
+      }
     },
-    [setTheme, settings.gpuAcceleration],
+    [setTheme, settings.gpuAcceleration, settings.backdropType],
   );
 
   return {

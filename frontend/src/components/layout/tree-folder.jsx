@@ -35,7 +35,7 @@ export function TreeFolder({ folder, children, emptyHint, onMoveNode }) {
           onMoveNode?.(dragId, folder.id);
         }}
         className={cn(
-          'app-no-drag rounded-md transition-colors',
+          'app-no-drag rounded-[7px] transition-colors',
           dropping && 'bg-primary/15 ring-1 ring-primary/50',
         )}
       >
@@ -43,18 +43,18 @@ export function TreeFolder({ folder, children, emptyHint, onMoveNode }) {
           <Button
             variant="ghost"
             size="sm"
-            className="app-no-drag h-7 w-full justify-start gap-1.5 px-2 text-xs font-medium text-muted-foreground hover:text-secondary-foreground"
+            className="app-no-drag h-7 w-full justify-start gap-1.5 rounded-[7px] px-2.5 text-[13px] font-normal text-[#3c3c41] hover:bg-[#e8e8eb] hover:text-[#242429] dark:text-muted-foreground dark:hover:bg-accent dark:hover:text-secondary-foreground"
           >
             <ChevronRight
               className={cn(
-                'h-3 w-3 shrink-0 transition-transform duration-200',
+                'h-3.5 w-3.5 shrink-0 text-[#85858a] transition-transform duration-200',
                 open && 'rotate-90',
               )}
             />
             {open ? (
-              <FolderOpen className="h-3.5 w-3.5 shrink-0 text-primary" />
+              <FolderOpen className="h-3.5 w-3.5 shrink-0 text-[#7b7b81]" strokeWidth={1.7} />
             ) : (
-              <Folder className="h-3.5 w-3.5 shrink-0 text-primary/70" />
+              <Folder className="h-3.5 w-3.5 shrink-0 text-[#7b7b81]" strokeWidth={1.7} />
             )}
             <span className="truncate">{folder.name}</span>
           </Button>
@@ -63,7 +63,7 @@ export function TreeFolder({ folder, children, emptyHint, onMoveNode }) {
           <div className="space-y-0.5 pl-4 pt-0.5">
             {children}
             {isEmpty && emptyHint && (
-              <p className="px-2 pl-6 text-[11px] italic text-muted-foreground">{emptyHint}</p>
+              <p className="px-2 pl-6 text-[11px] italic text-[#85858a] dark:text-muted-foreground">{emptyHint}</p>
             )}
           </div>
         </CollapsibleContent>

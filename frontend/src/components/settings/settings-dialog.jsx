@@ -24,6 +24,11 @@ const densityOptions = [
   ['default', '默认'],
   ['comfortable', '宽松'],
 ];
+const backdropOptions = [
+  ['none', '无'],
+  ['mica', '云母'],
+  ['acrylic', '亚克力'],
+];
 const fontSizeOptions = [12, 13, 14, 15, 16];
 const scrollbackOptions = [1000, 5000, 10000, 20000];
 
@@ -123,6 +128,14 @@ export function SettingsDialog({ open, anchorRef, onClose, settings, onSave }) {
             </SettingRow>
             <SettingRow label="GPU 硬件加速" description="使用显卡渲染界面，出现花屏或闪烁时可关闭，重启应用后生效。">
               <Switch checked={draft.gpuAcceleration} onCheckedChange={value => updateDraft('gpuAcceleration', value)} aria-label="GPU 硬件加速" />
+            </SettingRow>
+            <SettingRow label="背景材质" description="半透明窗口背后的模糊质感；macOS 立即生效，Windows 需重启。">
+              <Select value={draft.backdropType} onValueChange={value => updateDraft('backdropType', value)}>
+                <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {backdropOptions.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </SettingRow>
           </TabsContent>
 

@@ -5,3 +5,5 @@ build/
 .cache/
 frontend/.npm-cache/
 frontend/node_modules/
+.codegraph/
+.claude/

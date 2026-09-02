@@ -301,8 +301,6 @@ export function Shell() {
     }
   }, [setTabStatus, buffersRef]);
 
-  const handleDisconnect = useCallback(() => disconnectTab(activeTab), [activeTab, disconnectTab]);
-
   const onActiveConnect = useCallback(
     payload => handleConnect(activeTab.id, payload),
     [activeTab.id, handleConnect],
@@ -341,12 +339,12 @@ export function Shell() {
       data-density={settings.density}
     >
       <header
-        className="app-drag flex min-w-0 select-none border-b border-border bg-muted"
+        className="app-drag flex min-w-0 select-none bg-transparent"
         style={{ height: 'var(--density-tab-height)' }}
       >
         <TooltipProvider delayDuration={300}>
           <div
-            className="flex shrink-0 items-center gap-3 px-3 transition-[width] duration-200 ease-out"
+            className="flex shrink-0 items-center gap-3 bg-[#f7f7f8]/90 px-3 transition-[width] duration-200 ease-out dark:bg-secondary/90"
             style={{ width: isConnectionTreeVisible ? connectionTreeWidth + 1 : 200 }}
           >
             <div className="app-no-drag group/window-controls flex items-center gap-2" aria-label="窗口控制">
@@ -428,7 +426,7 @@ export function Shell() {
         </Panel>
         <Separator
           className={cn(
-            'cursor-col-resize bg-transparent transition-[width,opacity,background-color] duration-200 hover:bg-primary/60 data-[separator=dragging]:bg-primary',
+            'cursor-col-resize bg-transparent transition-[width,opacity,background-color,box-shadow] duration-200 hover:bg-primary/80 hover:shadow-[0_0_8px_hsl(var(--primary)/0.4)] data-[separator=dragging]:bg-primary data-[separator=dragging]:shadow-[0_0_10px_hsl(var(--primary)/0.55)]',
             isConnectionTreeVisible ? 'w-px' : 'pointer-events-none w-0 opacity-0',
           )}
         />
@@ -438,7 +436,7 @@ export function Shell() {
               <Panel minSize={320}>
                 <div
                   className={cn(
-                    'relative flex h-full min-h-0 overflow-auto bg-background p-5',
+                    'terminal-panel relative flex h-full min-h-0 overflow-auto bg-background p-5',
                     terminalActive && 'overflow-hidden p-0',
                     activeTab.kind === 'dashboard' && 'overflow-hidden p-0',
                   )}
@@ -474,7 +472,7 @@ export function Shell() {
               </Panel>
               {terminalActive && activeUtility && (
                 <>
-                  <Separator className="w-px cursor-col-resize bg-transparent transition-colors duration-150 hover:bg-primary/60 data-[separator=dragging]:bg-primary" />
+                  <Separator className="w-px cursor-col-resize bg-transparent transition-[background-color,box-shadow] duration-150 hover:bg-primary/80 hover:shadow-[0_0_8px_hsl(var(--primary)/0.4)] data-[separator=dragging]:bg-primary data-[separator=dragging]:shadow-[0_0_10px_hsl(var(--primary)/0.55)]" />
                   <Panel
                     defaultSize={240}
                     minSize={180}
@@ -493,7 +491,6 @@ export function Shell() {
         activeTab={activeTab}
         activeConnectionCount={activeConnectionCount}
         globalStatus={globalStatus}
-        onDisconnect={handleDisconnect}
       />
 
       <SettingsDialog

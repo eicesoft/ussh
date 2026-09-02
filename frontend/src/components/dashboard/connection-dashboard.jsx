@@ -1,4 +1,4 @@
-import { FolderOpen, LayoutDashboard, Plus, Server } from 'lucide-react';
+import { FolderOpen, LayoutDashboard, Plus, Server, Terminal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export function ConnectionDashboard({ nodes, onConnect, onNew }) {
@@ -52,11 +52,8 @@ export function ConnectionDashboard({ nodes, onConnect, onNew }) {
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {group.links.map(link => (
-                    <button
+                    <div
                       key={link.id}
-                      type="button"
-                      onDoubleClick={() => onConnect(link)}
-                      title="双击连接"
                       className="group rounded-lg border border-border bg-card p-4 text-left shadow-sm transition-all hover:border-primary/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <div className="flex items-start gap-3">
@@ -64,16 +61,24 @@ export function ConnectionDashboard({ nodes, onConnect, onNew }) {
                           <Server className="h-4 w-4" />
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium">{link.name}</p>
+                          <div className="flex min-w-0 items-center justify-between gap-2">
+                            <p className="truncate text-sm font-medium">{link.name}</p>
+                            <Button
+                              type="button"
+                              size="icon"
+                              className="h-7 w-7 shrink-0"
+                              onClick={() => onConnect(link)}
+                              aria-label="终端"
+                            >
+                              <Terminal className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                           <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
                             {link.username}@{link.host}:{link.port || 22}
                           </p>
-                          <p className="mt-3 text-[11px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-                            双击连接
-                          </p>
                         </div>
                       </div>
-                    </button>
+                    </div>
                   ))}
                 </div>
               </section>

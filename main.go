@@ -22,6 +22,15 @@ func main() {
 	if gpuDisabled {
 		gpuPolicy = linux.WebviewGpuPolicyNever
 	}
+	// 背景材质（云母/亚克力）需要窗口半透明：Windows 11 22621+ 使用系统 Backdrop，macOS 由 cgo 注入。
+	backdrop := loadBackdropType()
+	backdropType := windows.Auto
+	switch backdrop {
+	case "mica":
+		backdropType = windows.Mica
+	case "acrylic":
+		backdropType = windows.Acrylic
+	}
 	err := wails.Run(&options.App{
 		Title:     "uSSH",
 		Width:     1280,
@@ -39,6 +48,8 @@ func main() {
 		},
 		Windows: &windows.Options{
 			WebviewGpuIsDisabled: gpuDisabled,
+			WindowIsTranslucent:  backdrop != "none",
+			BackdropType:         backdropType,
 		},
 		Linux: &linux.Options{
 			WebviewGpuPolicy: gpuPolicy,

@@ -53,6 +53,8 @@ type App struct {
 func NewApp() *App { return &App{connections: map[string]*sshConnection{}} }
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	// macOS 上背景材质由窗口内注入的 NSVisualEffectView 实现，窗口就绪后应用。
+	applyWindowMaterial(loadBackdropType())
 	if db, err := openStore(); err == nil {
 		a.db = db
 	} else {

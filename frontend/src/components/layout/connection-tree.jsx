@@ -30,11 +30,11 @@ export function ConnectionTree({
   return (
     <TooltipProvider delayDuration={300}>
       <aside
-        className="flex h-full flex-col select-none bg-secondary text-secondary-foreground"
+        className="flex h-full flex-col select-none bg-[#f7f7f8]/90 text-[#2d2d31] dark:bg-secondary/90 dark:text-secondary-foreground"
         aria-label="连接管理"
       >
-        <ScrollArea className="app-drag flex-1 px-3 pt-3">
-          <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <ScrollArea className="app-drag flex-1 px-2.5 pt-2.5">
+          <div className="mb-1 px-1.5 text-[11px] font-medium text-[#66666b] dark:text-muted-foreground">
             连接
           </div>
           {activeSessions.length > 0 ? (
@@ -42,12 +42,12 @@ export function ConnectionTree({
               <TreeNode key={tab.id} tab={tab} active={tab.id === activeId} onSelect={onSelect} />
             ))
           ) : (
-            <p className="app-no-drag px-2 py-1 text-xs text-muted-foreground">暂无活动连接</p>
+            <p className="app-no-drag px-2.5 py-1 text-xs text-[#85858a] dark:text-muted-foreground">暂无活动连接</p>
           )}
 
           {inactiveSessions.length > 0 && (
             <>
-              <div className="mb-1 mt-3 px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <div className="mb-1 mt-3 px-1.5 text-[11px] font-medium text-[#66666b] dark:text-muted-foreground">
                 未连接
               </div>
               {inactiveSessions.map(tab => (
@@ -56,21 +56,21 @@ export function ConnectionTree({
             </>
           )}
 
-          <div className="mb-1 mt-3 flex items-center justify-between px-1">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">本地</span>
-            <div className="app-no-drag flex items-center gap-0.5">
+          <div className="mb-1 mt-4 flex items-center justify-between px-1.5">
+            <span className="text-[11px] font-medium text-[#66666b] dark:text-muted-foreground">已保存的连接</span>
+            <div className="app-no-drag flex items-center gap-1">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={onAddFolder}>
-                    <FolderPlus className="h-3 w-3" />
+                  <Button variant="ghost" size="icon" className="h-5 w-5 rounded-md text-[#77777d] hover:bg-[#e6e6e9] hover:text-[#36363b]" onClick={onAddFolder}>
+                    <FolderPlus className="h-3.5 w-3.5" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">新建文件夹</TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={onAddLink}>
-                    <Link2 className="h-3 w-3" />
+                  <Button variant="ghost" size="icon" className="h-5 w-5 rounded-md text-[#77777d] hover:bg-[#e6e6e9] hover:text-[#36363b]" onClick={onAddLink}>
+                    <Link2 className="h-3.5 w-3.5" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">新建链接</TooltipContent>
@@ -78,7 +78,7 @@ export function ConnectionTree({
             </div>
           </div>
           {nodes.length === 0 ? (
-            <p className="app-no-drag px-2 py-1 text-xs text-muted-foreground">添加常用 SSH 连接</p>
+            <p className="app-no-drag px-2.5 py-1 text-xs text-[#85858a] dark:text-muted-foreground">添加常用 SSH 连接</p>
           ) : (
             <>
               {folders.map(folder => (
@@ -191,10 +191,10 @@ function SavedRootNode({ node, onOpen, onEdit, onClone, onDelete }) {
           event.preventDefault();
           setContextMenu({ open: true, x: event.clientX, y: event.clientY });
         }}
-        className="app-no-drag group relative flex h-7 cursor-grab items-center gap-2 rounded-md px-2 text-xs font-normal text-secondary-foreground hover:bg-accent active:cursor-grabbing"
+        className="app-no-drag group relative flex h-7 cursor-grab items-center gap-2 rounded-[7px] px-2.5 text-[13px] font-normal text-[#2d2d31] transition-colors hover:bg-[#e8e8eb] active:cursor-grabbing dark:text-secondary-foreground dark:hover:bg-accent"
         title="双击连接"
       >
-        <Terminal className="h-3.5 w-3.5 shrink-0 text-primary/70" />
+        <Terminal className="h-3.5 w-3.5 shrink-0 text-[#e59a17]" strokeWidth={1.8} />
         <span className="truncate">{node.name}</span>
         {showEdit && (
           <span className="ml-auto flex items-center pr-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">

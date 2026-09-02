@@ -54,6 +54,10 @@ export function SendInput(arg1, arg2) {
   return window['go']['main']['App']['SendInput'](arg1, arg2);
 }
 
+export function SetBackdropType(arg1) {
+  return window['go']['main']['App']['SetBackdropType'](arg1);
+}
+
 export function SetCredential(arg1, arg2) {
   return window['go']['main']['App']['SetCredential'](arg1, arg2);
 }

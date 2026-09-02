@@ -16,12 +16,12 @@ export function TreeNode({ tab, active, onSelect }) {
       onClick={() => onSelect(tab.id)}
       title={tab.label}
       className={cn(
-        'app-no-drag h-7 w-full justify-start gap-2 px-2 text-xs font-normal',
-        active && 'bg-accent text-accent-foreground font-medium',
+        'app-no-drag h-7 w-full justify-start gap-2 rounded-[7px] px-2.5 text-[13px] font-normal text-[#2d2d31] transition-colors hover:bg-[#e8e8eb] dark:text-secondary-foreground dark:hover:bg-accent',
+        active && 'bg-[#dfdfe3] text-[#242429] font-medium dark:bg-accent dark:text-accent-foreground',
       )}
     >
       <span
-        className={cn('h-2 w-2 shrink-0 rounded-full', dotColor[tab.status] ?? 'bg-muted-foreground')}
+        className={cn('h-1.5 w-1.5 shrink-0 rounded-full', dotColor[tab.status] ?? 'bg-muted-foreground')}
       />
       <span className="truncate">{tab.label}</span>
     </Button>

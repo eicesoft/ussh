@@ -52,6 +52,9 @@ export const api = {
   async setGpuAcceleration(enabled) {
     return appApi()?.SetGpuAcceleration(enabled);
   },
+  async setBackdropType(material) {
+    return appApi()?.SetBackdropType(material);
+  },
 };
 
 export function onTerminalOutput(handler) {

@@ -1,21 +1,27 @@
-import { useCallback, useState } from 'react';
-import { Group, Panel, Separator } from 'react-resizable-panels';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
+import { Quit, WindowIsMaximised, WindowMinimise, WindowToggleMaximise } from '../../../wailsjs/runtime/runtime';
+import { Minus, PanelLeftClose, PanelLeftOpen, Plus, Settings, X } from 'lucide-react';
 import { ConnectionTree } from './connection-tree';
 import { TabBar } from './tab-bar';
-import { UtilityRail } from './utility-rail';
 import { UtilityPanel } from './utility-panel';
 import { StatusBar } from './status-bar';
 import { ConnectionForm } from '@/components/connection/connection-form';
 import { TerminalView } from '@/components/connection/terminal-view';
+import { TerminalActions } from '@/components/connection/terminal-actions';
 import { SavedLinkDialog } from '@/components/connection/saved-link-dialog';
 import { NewFolderDialog } from '@/components/connection/new-folder-dialog';
 import { ConfirmDeleteDialog } from '@/components/connection/confirm-delete-dialog';
+import { SettingsDialog } from '@/components/settings/settings-dialog';
 import { ConnectionDashboard } from '@/components/dashboard/connection-dashboard';
 import { useTabs } from '@/hooks/use-tabs';
 import { useSavedNodes } from '@/hooks/use-saved-nodes';
 import { useTerminalEvents } from '@/hooks/use-terminal-event';
+import { useSettings } from '@/hooks/use-settings';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export function Shell() {
   const {
@@ -40,18 +46,37 @@ export function Shell() {
     createSSHLink,
     moveNode,
     updateSSHLink,
+    cloneSSHLink,
     deleteSSHLink,
     getCredential,
     setCredential,
     pickPrivateKeyFile,
   } = useSavedNodes();
+  const { settings, applySettings } = useSettings();
   const [globalStatus, setGlobalStatus] = useState('准备就绪');
+  const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [showSavedLinkDialog, setShowSavedLinkDialog] = useState(false);
   const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
   const [editingNode, setEditingNode] = useState(null);
   const [editingCredential, setEditingCredential] = useState(null);
   const [deletingNode, setDeletingNode] = useState(null);
   const [activeUtility, setActiveUtility] = useState(null);
+  const [isWindowMaximised, setIsWindowMaximised] = useState(false);
+  const [connectionTreeWidth, setConnectionTreeWidth] = useState(240);
+  const [isConnectionTreeVisible, setIsConnectionTreeVisible] = useState(true);
+  const connectionTreePanelRef = usePanelRef();
+  const settingsButtonRef = useRef(null);
+
+  useEffect(() => {
+    if (!window.runtime) return undefined;
+    let cancelled = false;
+    WindowIsMaximised().then(maximised => {
+      if (!cancelled) setIsWindowMaximised(maximised);
+    }).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useTerminalEvents({
     onOutput: (tabId, data) => writeToTab(tabId, data),
@@ -105,6 +130,18 @@ export function Shell() {
     setDeletingNode(node);
   }, []);
 
+  const handleCloneSaved = useCallback(
+    async node => {
+      try {
+        const created = await cloneSSHLink(node.id);
+        setGlobalStatus(`已克隆「${created?.name || node.name}」`);
+      } catch (e) {
+        setGlobalStatus(`克隆失败：${e}`);
+      }
+    },
+    [cloneSSHLink],
+  );
+
   const submitDelete = useCallback(async () => {
     if (!deletingNode) return;
     const target = deletingNode;
@@ -126,6 +163,9 @@ export function Shell() {
   const submitSavedLink = useCallback(
     async payload => {
       try {
+        const cred = payload.credential || {};
+        // 所有槽位都是 undefined = 凭据无变化，不触发密钥环读写
+        const credentialChanged = Object.values(cred).some(v => v !== undefined);
         if (editingNode) {
           await updateSSHLink(editingNode.id, payload.parentId, {
             name: payload.name,
@@ -134,7 +174,9 @@ export function Shell() {
             username: payload.username,
             authType: payload.authType,
           });
-          await setCredential(editingNode.id, payload.credential || {});
+          if (credentialChanged) {
+            await setCredential(editingNode.id, cred);
+          }
         } else {
           const created = await createSSHLink(payload.parentId, {
             name: payload.name,
@@ -143,8 +185,8 @@ export function Shell() {
             username: payload.username,
             authType: payload.authType,
           });
-          if (created?.id) {
-            await setCredential(created.id, payload.credential || {});
+          if (created?.id && credentialChanged) {
+            await setCredential(created.id, cred);
           }
         }
         closeSavedDialog();
@@ -160,6 +202,12 @@ export function Shell() {
     async (tabId, payload) => {
       buffersRef.current[tabId] = '';
       setTabStatus(tabId, 'connecting');
+      updateTab(tabId, {
+        host: payload.host,
+        port: payload.port,
+        username: payload.username,
+        authType: payload.authType,
+      });
       const term = termsRef.current[tabId];
       if (term) term.reset();
       const size = term
@@ -169,7 +217,9 @@ export function Shell() {
         const message = await api.connect(tabId, payload, size);
         setGlobalStatus(message);
         setTabStatus(tabId, 'connected');
-        updateTab(tabId, { label: `${payload.username || 'user'}@${payload.host}` });
+        updateTab(tabId, tab => ({
+          label: tab.name || `${payload.username || 'user'}@${payload.host}`,
+        }));
       } catch (e) {
         setGlobalStatus(`连接失败：${e}`);
         setTabStatus(tabId, 'idle');
@@ -192,7 +242,7 @@ export function Shell() {
         authType: node.authType || 'password',
         savedNodeId: node.id,
       };
-      updateTab(id, { label: node.name, sourceNodeId: node.id, form });
+      updateTab(id, { label: node.name, name: node.name, sourceNodeId: node.id, form });
       handleConnect(id, form);
     },
     [newTab, updateTab, handleConnect],
@@ -210,6 +260,35 @@ export function Shell() {
     api.resizeTerminal(tabId, size).catch(() => {});
   }, []);
 
+  const minimiseWindow = useCallback(() => {
+    if (window.runtime) WindowMinimise();
+  }, []);
+
+  const toggleMaximiseWindow = useCallback(() => {
+    if (!window.runtime) return;
+    WindowToggleMaximise();
+    setIsWindowMaximised(maximised => !maximised);
+  }, []);
+
+  const closeWindow = useCallback(() => {
+    if (window.runtime) Quit();
+  }, []);
+
+  const syncConnectionTreeWidth = useCallback(({ inPixels }) => {
+    const nextWidth = Math.round(inPixels);
+    if (nextWidth === 0) return;
+    setConnectionTreeWidth(width => (width === nextWidth ? width : nextWidth));
+  }, []);
+
+  const toggleConnectionTree = useCallback(() => {
+    if (isConnectionTreeVisible) {
+      connectionTreePanelRef.current?.collapse();
+    } else {
+      connectionTreePanelRef.current?.expand();
+    }
+    setIsConnectionTreeVisible(visible => !visible);
+  }, [connectionTreePanelRef, isConnectionTreeVisible]);
+
   const disconnectTab = useCallback(async tab => {
     if (!tab || (tab.status !== 'connected' && tab.status !== 'connecting')) return;
     try {
@@ -221,8 +300,6 @@ export function Shell() {
       setGlobalStatus('已断开连接');
     }
   }, [setTabStatus, buffersRef]);
-
-  const handleDisconnect = useCallback(() => disconnectTab(activeTab), [activeTab, disconnectTab]);
 
   const onActiveConnect = useCallback(
     payload => handleConnect(activeTab.id, payload),
@@ -246,62 +323,144 @@ export function Shell() {
   const terminalActive =
     activeTab.kind !== 'dashboard' &&
     (activeTab.status === 'connected' || activeTab.status === 'connecting');
+  const terminalOpacity = (settings.terminal?.opacity ?? 100) / 100;
+  const activeConnectionCount = tabs.filter(
+    tab => tab.kind !== 'dashboard' && (tab.status === 'connected' || tab.status === 'connecting'),
+  ).length;
 
   return (
-    <main className="h-screen overflow-hidden bg-background text-foreground">
-      <Group orientation="horizontal" className="h-full w-full">
+    <main
+      className={cn(
+        'app-window flex h-screen flex-col overflow-hidden bg-background text-foreground',
+        isWindowMaximised ? 'rounded-none' : 'rounded-[14px]',
+        // 终端半透明时让桌面从终端区域透出，其余区域各有自己的底色。
+        terminalActive && terminalOpacity < 1 && 'bg-transparent',
+      )}
+      data-density={settings.density}
+    >
+      <header
+        className="app-drag flex min-w-0 select-none bg-transparent"
+        style={{ height: 'var(--density-tab-height)' }}
+      >
+        <TooltipProvider delayDuration={300}>
+          <div
+            className="flex shrink-0 items-center gap-3 bg-[#f7f7f8]/90 px-3 transition-[width] duration-200 ease-out dark:bg-secondary/90"
+            style={{ width: isConnectionTreeVisible ? connectionTreeWidth + 1 : 200 }}
+          >
+            <div className="app-no-drag group/window-controls flex items-center gap-2" aria-label="窗口控制">
+              <WindowControl label="关闭窗口" className="bg-[#ff5f57]" onClick={closeWindow}><X /></WindowControl>
+              <WindowControl label="最小化" className="bg-[#ffbd2e]" onClick={minimiseWindow}><Minus /></WindowControl>
+              <WindowControl label={isWindowMaximised ? '还原窗口' : '最大化'} className="bg-[#28c840]" onClick={toggleMaximiseWindow}><Plus /></WindowControl>
+            </div>
+            <span className="text-xs font-semibold tracking-tight text-foreground">uSSH</span>
+            <div className="app-no-drag ml-auto flex items-center gap-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={toggleConnectionTree}
+                    aria-label={isConnectionTreeVisible ? '隐藏侧边栏' : '显示侧边栏'}
+                  >
+                    {isConnectionTreeVisible ? <PanelLeftClose className="h-3.5 w-3.5" /> : <PanelLeftOpen className="h-3.5 w-3.5" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">{isConnectionTreeVisible ? '隐藏侧边栏' : '显示侧边栏'}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  ref={settingsButtonRef}
+                  onClick={() => setShowSettingsDialog(true)}
+                    aria-label="软件设置"
+                  >
+                    <Settings className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">软件设置</TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
+        </TooltipProvider>
+        <div className="min-w-0 flex-1">
+          <TabBar
+            tabs={tabs}
+            activeId={activeId}
+            onSelect={selectTab}
+            onClose={closeTab}
+            onDisconnect={disconnectTab}
+            onTogglePinned={toggleTabPinned}
+            onNew={newTab}
+          />
+        </div>
+      </header>
+
+      <Group orientation="horizontal" className="app-main-panels min-h-0 flex-1 w-full overflow-hidden">
         <Panel
+          panelRef={connectionTreePanelRef}
+          collapsible
+          collapsedSize={0}
           defaultSize={240}
           minSize={200}
           maxSize={340}
           groupResizeBehavior="preserve-pixel-size"
+          onResize={syncConnectionTreeWidth}
         >
           <ConnectionTree
             tabs={tabs}
             activeId={activeId}
             nodes={nodes}
             onSelect={selectTab}
-            onNew={newTab}
             onOpenSaved={connectSavedLink}
             onAddFolder={handleAddFolder}
             onAddLink={() => setShowSavedLinkDialog(true)}
             onMoveNode={handleMoveNode}
             onEditSaved={handleEditSaved}
+            onCloneSaved={handleCloneSaved}
             onDeleteSaved={handleDeleteSaved}
           />
         </Panel>
-        <Separator className="w-px bg-border transition-colors hover:bg-primary data-[separator=dragging]:bg-primary" />
+        <Separator
+          className={cn(
+            'cursor-col-resize bg-transparent transition-[width,opacity,background-color,box-shadow] duration-200 hover:bg-primary/80 hover:shadow-[0_0_8px_hsl(var(--primary)/0.4)] data-[separator=dragging]:bg-primary data-[separator=dragging]:shadow-[0_0_10px_hsl(var(--primary)/0.55)]',
+            isConnectionTreeVisible ? 'w-px' : 'pointer-events-none w-0 opacity-0',
+          )}
+        />
         <Panel minSize={460}>
-          <section className="flex h-full min-w-0 flex-col">
-            <TabBar
-              tabs={tabs}
-              activeId={activeId}
-              onSelect={selectTab}
-              onClose={closeTab}
-              onDisconnect={disconnectTab}
-              onTogglePinned={toggleTabPinned}
-              onAddSaved={() => setShowSavedLinkDialog(true)}
-            />
-            <Group orientation="horizontal" className="flex-1">
+          <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+            <Group orientation="horizontal" className="min-h-0 flex-1">
               <Panel minSize={320}>
                 <div
                   className={cn(
-                    'flex h-full min-h-0 overflow-auto bg-background p-5',
-                    terminalActive && 'overflow-hidden bg-[#0b1220] p-0',
+                    'terminal-panel relative flex h-full min-h-0 overflow-auto bg-background p-5',
+                    terminalActive && 'overflow-hidden p-0',
                     activeTab.kind === 'dashboard' && 'overflow-hidden p-0',
                   )}
+                  style={
+                    terminalActive
+                      ? { backgroundColor: `rgba(11, 18, 32, ${terminalOpacity})` }
+                      : undefined
+                  }
                 >
                   {activeTab.kind === 'dashboard' ? (
                     <ConnectionDashboard nodes={nodes} onConnect={connectSavedLink} onNew={newTab} />
                   ) : terminalActive ? (
-                    <TerminalView
-                      key={activeTab.id}
-                      tab={activeTab}
-                      onSend={onActiveSend}
-                      onResize={onActiveResize}
-                      onFocus={() => {}}
-                      onTermReady={onActiveTermReady}
-                    />
+                    <>
+                      <TerminalView
+                        key={activeTab.id}
+                        tab={activeTab}
+                        onSend={onActiveSend}
+                        onResize={onActiveResize}
+                        onFocus={() => {}}
+                        onTermReady={onActiveTermReady}
+                        terminalSettings={settings.terminal}
+                      />
+                      <TerminalActions active={activeUtility} onToggle={setActiveUtility} />
+                    </>
                   ) : (
                     <ConnectionForm
                       initialForm={activeTab.form}
@@ -311,9 +470,9 @@ export function Shell() {
                   )}
                 </div>
               </Panel>
-              {activeUtility && (
+              {terminalActive && activeUtility && (
                 <>
-                  <Separator className="w-px bg-border transition-colors hover:bg-primary data-[separator=dragging]:bg-primary" />
+                  <Separator className="w-px cursor-col-resize bg-transparent transition-[background-color,box-shadow] duration-150 hover:bg-primary/80 hover:shadow-[0_0_8px_hsl(var(--primary)/0.4)] data-[separator=dragging]:bg-primary data-[separator=dragging]:shadow-[0_0_10px_hsl(var(--primary)/0.55)]" />
                   <Panel
                     defaultSize={240}
                     minSize={180}
@@ -324,18 +483,23 @@ export function Shell() {
                   </Panel>
                 </>
               )}
-              <Panel defaultSize={40} minSize={40} maxSize={40} disabled>
-                <UtilityRail active={activeUtility} onToggle={setActiveUtility} />
-              </Panel>
             </Group>
-            <StatusBar
-              activeTab={activeTab}
-              globalStatus={globalStatus}
-              onDisconnect={handleDisconnect}
-            />
           </section>
         </Panel>
       </Group>
+      <StatusBar
+        activeTab={activeTab}
+        activeConnectionCount={activeConnectionCount}
+        globalStatus={globalStatus}
+      />
+
+      <SettingsDialog
+        open={showSettingsDialog}
+        anchorRef={settingsButtonRef}
+        onClose={() => setShowSettingsDialog(false)}
+        settings={settings}
+        onSave={applySettings}
+      />
 
       <SavedLinkDialog
         open={showSavedLinkDialog || editingNode !== null}
@@ -361,5 +525,28 @@ export function Shell() {
         onConfirm={submitDelete}
       />
     </main>
+  );
+}
+
+function WindowControl({ label, className, onClick, children }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            'flex h-3 w-3 items-center justify-center rounded-full text-black/55 shadow-[inset_0_0_0_0.5px_rgb(0_0_0_/_0.18)] transition-transform duration-100 hover:brightness-95 active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+            className,
+          )}
+          onClick={onClick}
+          aria-label={label}
+        >
+          <span className="opacity-0 transition-opacity duration-100 group-hover/window-controls:opacity-100 [&_svg]:h-[7px] [&_svg]:w-[7px] [&_svg]:stroke-[2.4]">
+            {children}
+          </span>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{label}</TooltipContent>
+    </Tooltip>
   );
 }

@@ -6,6 +6,10 @@ export function ClearCredential(arg1) {
   return window['go']['main']['App']['ClearCredential'](arg1);
 }
 
+export function CloneSSHLink(arg1) {
+  return window['go']['main']['App']['CloneSSHLink'](arg1);
+}
+
 export function Connect(arg1, arg2, arg3) {
   return window['go']['main']['App']['Connect'](arg1, arg2, arg3);
 }
@@ -50,8 +54,16 @@ export function SendInput(arg1, arg2) {
   return window['go']['main']['App']['SendInput'](arg1, arg2);
 }
 
+export function SetBackdropType(arg1) {
+  return window['go']['main']['App']['SetBackdropType'](arg1);
+}
+
 export function SetCredential(arg1, arg2) {
   return window['go']['main']['App']['SetCredential'](arg1, arg2);
+}
+
+export function SetGpuAcceleration(arg1) {
+  return window['go']['main']['App']['SetGpuAcceleration'](arg1);
 }
 
 export function UpdateSSHLink(arg1, arg2, arg3) {

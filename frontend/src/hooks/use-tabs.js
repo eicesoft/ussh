@@ -17,7 +17,7 @@ const newTabId = () =>
 
 export function useTabs() {
   const [tabs, setTabs] = useState(() => [
-    { id: newTabId(), kind: 'dashboard', label: '连接总览', status: 'idle', buffer: '', closable: false },
+    { id: newTabId(), kind: 'dashboard', label: '总览', status: 'idle', buffer: '', closable: false },
   ]);
   const [activeId, setActiveId] = useState(tabs[0].id);
   const buffersRef = useRef({});
@@ -56,7 +56,7 @@ export function useTabs() {
           const fresh = {
             id: newTabId(),
             kind: 'dashboard',
-            label: '连接总览',
+            label: '总览',
             status: 'idle',
             buffer: '',
             closable: false,
@@ -73,13 +73,21 @@ export function useTabs() {
   );
 
   const updateTab = useCallback((id, patch) => {
-    setTabs(prev => prev.map(t => (t.id === id ? { ...t, ...patch } : t)));
+    setTabs(prev =>
+      prev.map(t => (t.id === id ? { ...t, ...(typeof patch === 'function' ? patch(t) : patch) } : t)),
+    );
   }, []);
 
   const toggleTabPinned = useCallback(id => {
     setTabs(prev => {
       const next = prev.map(tab => (tab.id === id ? { ...tab, pinned: !tab.pinned } : tab));
-      return [...next.filter(tab => tab.pinned), ...next.filter(tab => !tab.pinned)];
+      const overviewTabs = next.filter(tab => tab.kind === 'dashboard');
+      const connectionTabs = next.filter(tab => tab.kind !== 'dashboard');
+      return [
+        ...overviewTabs,
+        ...connectionTabs.filter(tab => tab.pinned),
+        ...connectionTabs.filter(tab => !tab.pinned),
+      ];
     });
   }, []);
 

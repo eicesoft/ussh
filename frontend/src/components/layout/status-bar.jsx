@@ -19,34 +19,26 @@ function ThemeIcon({ resolved }) {
   return <Monitor className="h-3.5 w-3.5" />;
 }
 
-export function StatusBar({ activeTab, globalStatus, onDisconnect }) {
+export function StatusBar({ activeTab, activeConnectionCount, globalStatus }) {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const connected = activeTab?.status === 'connected';
+  const connectionStatus = connected
+    ? `已连接到 ${activeTab.name || activeTab.label}(${activeTab.host}:${activeTab.port || 22})`
+    : globalStatus;
 
   return (
-    <footer className="flex h-7 items-center gap-2 border-t border-border bg-muted px-3 text-xs text-muted-foreground">
+    <footer className="flex h-8 select-none items-center gap-2 bg-muted px-3 text-xs text-muted-foreground">
       <span
         className={cn(
           'h-1.5 w-1.5 shrink-0 rounded-full',
           connected ? 'bg-primary shadow-[0_0_0_3px_hsl(var(--primary)/0.18)]' : 'bg-muted-foreground',
         )}
       />
-      <span className="truncate">{globalStatus}</span>
-      <span className="ml-auto truncate">{connected ? activeTab.label : '未连接'}</span>
-
-      {connected && (
-        <>
-          <Separator orientation="vertical" className="mx-1 h-3" />
-          <button
-            onClick={onDisconnect}
-            className="text-destructive transition-colors hover:text-destructive/80"
-          >
-            断开
-          </button>
-        </>
-      )}
-
+      <span className="shrink-0">{activeConnectionCount} 个活动会话</span>
       <Separator orientation="vertical" className="mx-1 h-3" />
+      <span className="min-w-0 truncate">{connectionStatus}</span>
+
+      <Separator orientation="vertical" className="mx-1 ml-auto h-3" />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="h-6 w-6" aria-label="切换主题">

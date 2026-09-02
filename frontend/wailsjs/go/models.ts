@@ -47,10 +47,10 @@ export namespace main {
 	    }
 	}
 	export class SavedCredential {
-	    password: string;
-	    privateKey: string;
-	    passphrase: string;
-	    keyFile: string;
+	    password?: string;
+	    privateKey?: string;
+	    passphrase?: string;
+	    keyFile?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new SavedCredential(source);

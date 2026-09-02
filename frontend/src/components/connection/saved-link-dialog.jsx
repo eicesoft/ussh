@@ -39,6 +39,15 @@ const blankForm = {
   saveKeyFile: false,
 };
 
+// 槽位三态：undefined = 保持原值不动；'' = 清除；非空 = 覆盖。
+// 编辑模式下开关开着但输入留空，且原来已保存过 → 保持原值。
+function slotValue(save, value, hasSaved, editMode) {
+  if (!save) return '';
+  if (String(value ?? '').trim()) return value;
+  if (editMode && hasSaved) return undefined;
+  return '';
+}
+
 export function SavedLinkDialog({
   open,
   mode = 'create',
@@ -82,13 +91,17 @@ export function SavedLinkDialog({
     if (!form.username.trim()) return '请输入用户名';
     const port = Number(form.port);
     if (!port || port < 1 || port > 65535) return '端口需在 1-65535 之间';
-    if (form.authType === 'password' && form.savePassword && !form.password) {
+    // 编辑模式下凭据已保存且输入留空 = 保持原值，不要求必填
+    const keepPassword = mode === 'edit' && !!credential?.hasPassword;
+    const keepPrivateKey = mode === 'edit' && !!credential?.hasPrivateKey;
+    const keepKeyFile = mode === 'edit' && !!credential?.hasKeyFile;
+    if (form.authType === 'password' && form.savePassword && !form.password.trim() && !keepPassword) {
       return '请输入要保存的密码';
     }
-    if (form.authType === 'key' && form.savePrivateKey && !form.privateKey.trim()) {
+    if (form.authType === 'key' && form.savePrivateKey && !form.privateKey.trim() && !keepPrivateKey) {
       return '请输入要保存的私钥内容';
     }
-    if (form.authType === 'keyfile' && form.saveKeyFile && !form.keyFile.trim()) {
+    if (form.authType === 'keyfile' && form.saveKeyFile && !form.keyFile.trim() && !keepKeyFile) {
       return '请选择私钥文件';
     }
     return '';
@@ -103,6 +116,7 @@ export function SavedLinkDialog({
     }
     setError('');
     setBusy(true);
+    const editMode = mode === 'edit';
     try {
       await onSave({
         name: form.name.trim(),
@@ -112,10 +126,10 @@ export function SavedLinkDialog({
         parentId: Number(form.parentId) || 0,
         authType: form.authType,
         credential: {
-          password: form.savePassword ? form.password : '',
-          privateKey: form.savePrivateKey ? form.privateKey : '',
-          passphrase: form.authType === 'keyfile' ? form.passphrase : form.passphrase,
-          keyFile: form.saveKeyFile ? form.keyFile : '',
+          password: slotValue(form.savePassword, form.password, credential?.hasPassword, editMode),
+          privateKey: slotValue(form.savePrivateKey, form.privateKey, credential?.hasPrivateKey, editMode),
+          passphrase: slotValue(form.savePassphrase, form.passphrase, credential?.hasPassphrase, editMode),
+          keyFile: slotValue(form.saveKeyFile, form.keyFile, credential?.hasKeyFile, editMode),
         },
         clearCredential: false,
       });

@@ -35,11 +35,12 @@ type CredentialView struct {
 
 // SavedCredential 是写入 keyring 的明文结构，仅在内存中存在；
 // 任何时候都不应被序列化或落盘。
+// 指针语义：nil = 保持该槽位不变；"" = 删除该槽位；非空 = 覆盖写入。
 type SavedCredential struct {
-	Password   string `json:"password"`
-	PrivateKey string `json:"privateKey"`
-	Passphrase string `json:"passphrase"`
-	KeyFile    string `json:"keyFile"`
+	Password   *string `json:"password,omitempty"`
+	PrivateKey *string `json:"privateKey,omitempty"`
+	Passphrase *string `json:"passphrase,omitempty"`
+	KeyFile    *string `json:"keyFile,omitempty"`
 }
 
 const (
@@ -244,6 +245,60 @@ func (a *App) UpdateSSHLink(id int64, parentID int64, node SavedNode) (SavedNode
 	}, nil
 }
 
+// CloneSSHLink 复制一个 SSH 节点（名称加"副本"后缀），
+// 凭证在 keyring 内部直接复制，明文不经过前端。
+// 任一凭证槽位复制失败时回滚整个克隆。
+func (a *App) CloneSSHLink(id int64) (SavedNode, error) {
+	if a.db == nil {
+		return SavedNode{}, fmt.Errorf("本地连接库尚未就绪")
+	}
+	var src SavedNode
+	var srcType string
+	if err := a.db.QueryRow(`SELECT id, parent_id, type, name, host, port, username, auth_type FROM connection_nodes WHERE id = ?`, id).
+		Scan(&src.ID, &src.ParentID, &srcType, &src.Name, &src.Host, &src.Port, &src.Username, &src.AuthType); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return SavedNode{}, fmt.Errorf("节点不存在")
+		}
+		return SavedNode{}, err
+	}
+	if srcType != "ssh" {
+		return SavedNode{}, fmt.Errorf("只能克隆 SSH 节点")
+	}
+	clone, err := a.createNode(SavedNode{
+		ParentID: src.ParentID,
+		Type:     "ssh",
+		Name:     strings.TrimSpace(src.Name) + " 副本",
+		Host:     src.Host,
+		Port:     src.Port,
+		Username: src.Username,
+		AuthType: src.AuthType,
+	})
+	if err != nil {
+		return SavedNode{}, err
+	}
+	srcBase, cloneBase := credentialAccount(src.ID), credentialAccount(clone.ID)
+	for _, slot := range []string{"password", "privateKey", "passphrase", "keyFile"} {
+		value, err := getKeyring(srcBase + ":" + slot)
+		if err != nil {
+			a.rollbackClone(clone.ID)
+			return SavedNode{}, fmt.Errorf("复制凭证失败，克隆未创建：%w", err)
+		}
+		if value == "" {
+			continue
+		}
+		if err := setKeyring(cloneBase+":"+slot, value); err != nil {
+			a.rollbackClone(clone.ID)
+			return SavedNode{}, fmt.Errorf("复制凭证失败，克隆未创建：%w", err)
+		}
+	}
+	return clone, nil
+}
+
+func (a *App) rollbackClone(id int64) {
+	_, _ = a.db.Exec(`DELETE FROM connection_nodes WHERE id = ?`, id)
+	_ = a.clearAllCredentialSlots(id)
+}
+
 // DeleteSSHLink 删除节点并清理对应 keyring 条目。
 func (a *App) DeleteSSHLink(id int64) error {
 	if a.db == nil {
@@ -300,7 +355,7 @@ func (a *App) GetCredential(nodeID int64) (CredentialView, error) {
 }
 
 // SetCredential 把整张凭证写入 keyring。
-// 每个字段独立槽位；空字符串表示"删除该槽位"。
+// 每个字段独立槽位；nil 表示"保持该槽位不变"，空字符串表示"删除该槽位"。
 func (a *App) SetCredential(nodeID int64, cred SavedCredential) error {
 	base := credentialAccount(nodeID)
 	if err := a.writeSlot(base+":password", cred.Password); err != nil {
@@ -318,12 +373,15 @@ func (a *App) SetCredential(nodeID int64, cred SavedCredential) error {
 	return nil
 }
 
-func (a *App) writeSlot(account, value string) error {
-	value = strings.TrimSpace(value)
-	if value == "" {
+func (a *App) writeSlot(account string, value *string) error {
+	if value == nil {
+		return nil
+	}
+	v := strings.TrimSpace(*value)
+	if v == "" {
 		return deleteKeyring(account)
 	}
-	return setKeyring(account, value)
+	return setKeyring(account, v)
 }
 
 // ClearCredential 清理某节点的所有 keyring 条目。

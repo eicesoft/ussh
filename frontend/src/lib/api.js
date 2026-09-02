@@ -31,6 +31,9 @@ export const api = {
   async updateSSHLink(id, parentId, form) {
     return appApi()?.UpdateSSHLink(id, parentId, form);
   },
+  async cloneSSHLink(id) {
+    return appApi()?.CloneSSHLink(id);
+  },
   async deleteSSHLink(id) {
     return appApi()?.DeleteSSHLink(id);
   },
@@ -45,6 +48,12 @@ export const api = {
   },
   async pickPrivateKeyFile() {
     return appApi()?.PickPrivateKeyFile();
+  },
+  async setGpuAcceleration(enabled) {
+    return appApi()?.SetGpuAcceleration(enabled);
+  },
+  async setBackdropType(material) {
+    return appApi()?.SetBackdropType(material);
   },
 };
 

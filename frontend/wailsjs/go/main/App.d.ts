@@ -4,6 +4,8 @@ import {main} from '../models';
 
 export function ClearCredential(arg1:number):Promise<void>;
 
+export function CloneSSHLink(arg1:number):Promise<main.SavedNode>;
+
 export function Connect(arg1:string,arg2:main.ConnectionConfig,arg3:main.TerminalSize):Promise<string>;
 
 export function CreateFolder(arg1:number,arg2:string):Promise<main.SavedNode>;
@@ -26,6 +28,10 @@ export function ResizeTerminal(arg1:string,arg2:main.TerminalSize):Promise<void>
 
 export function SendInput(arg1:string,arg2:string):Promise<void>;
 
+export function SetBackdropType(arg1:string):Promise<void>;
+
 export function SetCredential(arg1:number,arg2:main.SavedCredential):Promise<void>;
+
+export function SetGpuAcceleration(arg1:boolean):Promise<void>;
 
 export function UpdateSSHLink(arg1:number,arg2:number,arg3:main.SavedNode):Promise<main.SavedNode>;

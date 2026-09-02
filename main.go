@@ -6,6 +6,9 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/linux"
+	"github.com/wailsapp/wails/v2/pkg/options/mac"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 )
 
 //go:embed all:frontend/dist
@@ -13,16 +16,44 @@ var assets embed.FS
 
 func main() {
 	app := NewApp()
+	// GPU 加速开关仅在创建窗口时生效：Windows 走 --disable-gpu，Linux 走 WebkitGpuPolicy，macOS 由系统管理。
+	gpuDisabled := loadGpuDisabled()
+	gpuPolicy := linux.WebviewGpuPolicyOnDemand
+	if gpuDisabled {
+		gpuPolicy = linux.WebviewGpuPolicyNever
+	}
+	// 背景材质（云母/亚克力）需要窗口半透明：Windows 11 22621+ 使用系统 Backdrop，macOS 由 cgo 注入。
+	backdrop := loadBackdropType()
+	backdropType := windows.Auto
+	switch backdrop {
+	case "mica":
+		backdropType = windows.Mica
+	case "acrylic":
+		backdropType = windows.Acrylic
+	}
 	err := wails.Run(&options.App{
 		Title:     "uSSH",
 		Width:     1280,
 		Height:    820,
 		MinWidth:  920,
 		MinHeight: 620,
+		Frameless: true,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		BackgroundColour: &options.RGBA{R: 15, G: 23, B: 42, A: 1},
+		// 让前端的圆角外侧透出桌面背景，而不是由原生窗口填充颜色。
+		BackgroundColour: &options.RGBA{R: 0, G: 0, B: 0, A: 0},
+		Mac: &mac.Options{
+			WebviewIsTransparent: true,
+		},
+		Windows: &windows.Options{
+			WebviewGpuIsDisabled: gpuDisabled,
+			WindowIsTranslucent:  backdrop != "none",
+			BackdropType:         backdropType,
+		},
+		Linux: &linux.Options{
+			WebviewGpuPolicy: gpuPolicy,
+		},
 		OnStartup:        app.startup,
 		OnShutdown:       app.shutdown,
 		Bind: []interface{}{

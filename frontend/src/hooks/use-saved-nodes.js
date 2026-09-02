@@ -47,6 +47,15 @@ export function useSavedNodes() {
     [reload],
   );
 
+  const cloneSSHLink = useCallback(
+    async id => {
+      const created = await api.cloneSSHLink(id);
+      await reload();
+      return created;
+    },
+    [reload],
+  );
+
   const deleteSSHLink = useCallback(
     async id => {
       await api.deleteSSHLink(id);
@@ -62,6 +71,7 @@ export function useSavedNodes() {
     createSSHLink,
     moveNode,
     updateSSHLink,
+    cloneSSHLink,
     deleteSSHLink,
     getCredential: api.getCredential,
     setCredential: api.setCredential,

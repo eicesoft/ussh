@@ -7,30 +7,27 @@ const items = [
   ['files', '文件传输', FileText],
 ];
 
-export function UtilityRail({ active, onToggle }) {
+export function TerminalActions({ active, onToggle }) {
   return (
-    <TooltipProvider delayDuration={200}>
-      <aside
-        className="flex h-full w-10 flex-col items-center gap-1.5 border-l border-border bg-secondary py-2"
-        aria-label="终端工具"
-      >
+    <div className="pointer-events-none absolute right-3 top-3 z-20 flex shrink-0 gap-1">
+      <TooltipProvider delayDuration={200}>
         {items.map(([id, label, Icon]) => (
           <Tooltip key={id}>
             <TooltipTrigger asChild>
               <Button
                 variant={active === id ? 'default' : 'ghost'}
                 size="icon"
-                className="h-8 w-8"
+                className="pointer-events-auto h-8 w-8 text-slate-400 hover:bg-slate-700/70 hover:text-slate-100 active:scale-95"
                 onClick={() => onToggle(active === id ? null : id)}
                 aria-label={label}
               >
                 <Icon className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="left">{label}</TooltipContent>
+            <TooltipContent side="bottom">{label}</TooltipContent>
           </Tooltip>
         ))}
-      </aside>
-    </TooltipProvider>
+      </TooltipProvider>
+    </div>
   );
 }

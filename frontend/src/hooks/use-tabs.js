@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { decorateAgentMarkers } from '@/lib/terminal-output';
 
 export const blankForm = {
   host: '',
@@ -28,12 +29,13 @@ export function useTabs() {
   }, []);
 
   const writeToTab = useCallback((tabId, data) => {
+    const displayData = decorateAgentMarkers(data);
     const previous = buffersRef.current[tabId] || '';
-    buffersRef.current[tabId] = (previous + data).slice(-2_000_000);
+    buffersRef.current[tabId] = (previous + displayData).slice(-2_000_000);
     const term = termsRef.current[tabId];
     if (term) {
       try {
-        term.write(data);
+        term.write(displayData);
       } catch (_) {}
     }
   }, []);
@@ -42,7 +44,7 @@ export function useTabs() {
 
   const newTab = useCallback(() => {
     const id = newTabId();
-    const tab = { id, kind: 'connection', label: '新会话', status: 'idle', buffer: '', closable: true, form: blankForm };
+    const tab = { id, kind: 'connection', label: '连接', status: 'idle', buffer: '', closable: true, form: blankForm };
     setTabs(prev => [...prev, tab]);
     setActiveId(id);
     return id;

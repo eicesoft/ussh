@@ -31,7 +31,9 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.87.0",
+    "react-markdown": "^10.1.0",
     "react-resizable-panels": "^4.12.3",
+    "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.6.0",
     "zod": "^3.25.76"
   },

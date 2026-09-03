@@ -154,3 +154,39 @@
   pointer-events: none !important;
   z-index: -1 !important;
 }
+
+/* SFTP 文件列表滚动条 —— 与终端滚动条风格一致 */
+.sftp-file-list {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.sftp-file-list::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.sftp-file-list::-webkit-scrollbar-track {
+  background: transparent !important;
+  border-radius: 999px;
+}
+
+.sftp-file-list::-webkit-scrollbar-thumb {
+  background: transparent !important;
+  border-radius: 999px;
+  min-height: 28px;
+  min-width: 28px;
+}
+
+.sftp-file-list:hover::-webkit-scrollbar-thumb,
+.sftp-file-list:active::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.46) !important;
+}
+
+.sftp-file-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(203, 213, 225, 0.82);
+}
+
+.sftp-file-list::-webkit-scrollbar-corner {
+  background: transparent !important;
+}

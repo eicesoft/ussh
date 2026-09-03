@@ -1,7 +1,7 @@
 import { FolderOpen, LayoutDashboard, Plus, Server, Terminal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-export function ConnectionDashboard({ nodes, onConnect, onNew }) {
+export function ConnectionDashboard({ nodes, onConnect, onNewConnection }) {
   const folders = nodes.filter(node => node.type === 'folder');
   const rootLinks = nodes.filter(node => node.type === 'ssh' && node.parentId === 0);
   const groups = [
@@ -29,9 +29,9 @@ export function ConnectionDashboard({ nodes, onConnect, onNew }) {
               </p>
             </div>
           </div>
-          <Button onClick={onNew}>
+          <Button onClick={onNewConnection}>
             <Plus className="h-4 w-4" />
-            临时连接
+            新增连接
           </Button>
         </header>
 

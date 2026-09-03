@@ -41,7 +41,7 @@ const authText = {
   keyfile: '密钥文件',
 };
 
-export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onTogglePinned, onNew }) {
+export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onTogglePinned, onNewConnection }) {
   const scrollRef = useRef(null);
   const [contextTabId, setContextTabId] = useState(null);
   const [pendingCloseTabId, setPendingCloseTabId] = useState(null);
@@ -102,7 +102,7 @@ export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onTogg
     <>
       <TooltipProvider delayDuration={300}>
         <div
-          className="app-drag flex min-w-0 select-none bg-[#f7f7f8]/90 dark:bg-secondary/90"
+          className="app-drag flex min-w-0 select-none bg-transparent"
           style={{ height: 'var(--density-tab-height)' }}
         >
           <div className="relative min-w-0 flex-1">
@@ -114,19 +114,31 @@ export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onTogg
             >
               {tabs.map(tab => {
                 const active = tab.id === activeId;
+                const isOverview = tab.kind === 'dashboard';
+                const compactOverview = tab.kind === 'dashboard' && !active;
                 const trigger = (
                   <div
                     className={cn(
-                      'app-no-drag group relative my-[4px] flex h-[calc(100%-8px)] max-w-[240px] shrink-0 cursor-pointer select-none items-center gap-2 rounded-[8px] text-xs transition-colors',
+                      'app-no-drag group relative my-[4px] flex h-[calc(100%-8px)] max-w-[240px] shrink-0 cursor-pointer select-none items-center gap-2 rounded-[8px] text-xs transition-[width,min-width,padding,gap] duration-200 ease-out',
+                      compactOverview && 'justify-center gap-0 overflow-hidden',
                       active
                         ? 'bg-background font-semibold text-foreground shadow-sm'
                         : 'text-[#6f6f75] hover:bg-[#eeeeF0] hover:text-[#2d2d31] dark:text-muted-foreground dark:hover:bg-background/50 dark:hover:text-foreground',
                     )}
                     style={{
-                      minWidth: tab.pinned
-                        ? 'var(--density-tab-pinned-min-width)'
-                        : 'var(--density-tab-min-width)',
-                      paddingInline: 'var(--density-tab-padding-x)',
+                      minWidth: compactOverview
+                        ? 'calc(var(--density-tab-height) - 8px)'
+                        : tab.pinned
+                          ? 'var(--density-tab-pinned-min-width)'
+                          : 'var(--density-tab-min-width)',
+                      width: isOverview
+                        ? compactOverview
+                          ? 'calc(var(--density-tab-height) - 8px)'
+                          : tab.pinned
+                            ? 'var(--density-tab-pinned-min-width)'
+                            : 'var(--density-tab-min-width)'
+                        : undefined,
+                      paddingInline: compactOverview ? '0px' : 'var(--density-tab-padding-x)',
                     }}
                     onClick={event => {
                       onSelect(tab.id);
@@ -151,15 +163,31 @@ export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onTogg
                         style={{ width: 'var(--density-tab-icon-size)', height: 'var(--density-tab-icon-size)' }}
                       />
                     ) : (
-                      <span
-                        className={cn(
-                          'h-1.5 w-1.5 shrink-0 rounded-full',
-                          dotColor[tab.status] ?? 'bg-muted-foreground',
-                          !active && tab.status === 'connected' && 'opacity-50',
+                      <>
+                        {tab.color && (
+                          <span
+                            className="h-[1em] w-[3px] shrink-0 rounded-full"
+                            style={{ backgroundColor: tab.color }}
+                            aria-hidden="true"
+                          />
                         )}
-                      />
+                        <span
+                          className={cn(
+                            'h-1.5 w-1.5 shrink-0 rounded-full',
+                            dotColor[tab.status] ?? 'bg-muted-foreground',
+                            !active && tab.status === 'connected' && 'opacity-50',
+                          )}
+                        />
+                      </>
                     )}
-                    <span className="truncate">{tab.label}</span>
+                    <span
+                      className={cn(
+                        'min-w-0 truncate transition-[max-width,opacity] duration-200 ease-out',
+                        compactOverview ? 'max-w-0 opacity-0' : 'max-w-[12rem] opacity-100',
+                      )}
+                    >
+                      {tab.label}
+                    </span>
                     {tab.pinned && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />}
                     {tab.closable && (
                       <button
@@ -238,9 +266,11 @@ export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onTogg
                 variant="ghost"
                 size="sm"
                 className="app-no-drag my-[4px] h-[calc(100%-8px)] shrink-0 rounded-[7px] p-0 text-[#77777d] hover:bg-[#e8e8eb] hover:text-[#36363b] dark:text-muted-foreground dark:hover:bg-accent dark:hover:text-foreground"
-                style={{ width: 'var(--density-tab-control-size)' }}
-                onClick={onNew}
-                aria-label="临时连接"
+                style={{
+                  width: 'calc(var(--density-tab-height) - 8px)',
+                }}
+                onClick={onNewConnection}
+                aria-label="新增连接"
               >
                 <Plus className="h-4 w-4" />
               </Button>

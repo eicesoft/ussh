@@ -22,6 +22,7 @@ type SavedNode struct {
 	Port     int    `json:"port"`
 	Username string `json:"username"`
 	AuthType string `json:"authType"`
+	Color    string `json:"color"`
 }
 
 // CredentialView 仅暴露"是否已保存"的标记，不返回明文。
@@ -48,8 +49,24 @@ const (
 	AuthKey      = "key"
 	AuthKeyFile  = "keyfile"
 
-	keyringService = "uSSH"
+	keyringService     = "uSSH"
+	defaultFolderColor = ""
 )
+
+func validateFolderColor(color string) (string, error) {
+	if color == "" {
+		return defaultFolderColor, nil
+	}
+	if len(color) != 7 || color[0] != '#' {
+		return "", fmt.Errorf("不支持的文件夹颜色：%s", color)
+	}
+	for _, char := range color[1:] {
+		if !((char >= '0' && char <= '9') || (char >= 'a' && char <= 'f') || (char >= 'A' && char <= 'F')) {
+			return "", fmt.Errorf("不支持的文件夹颜色：%s", color)
+		}
+	}
+	return strings.ToLower(color), nil
+}
 
 // ErrCredentialUnavailable 标识 keyring 不可用的错误。
 var ErrCredentialUnavailable = errors.New("系统密钥环不可用，凭证将无法持久化")
@@ -78,12 +95,17 @@ func openStore() (*sql.DB, error) {
 		port INTEGER NOT NULL DEFAULT 22,
 		username TEXT NOT NULL DEFAULT '',
 		auth_type TEXT NOT NULL DEFAULT 'password',
+		color TEXT NOT NULL DEFAULT '',
 		created_at INTEGER NOT NULL
 	)`); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("无法初始化连接库：%w", err)
 	}
 	if err := ensureColumn(db, "connection_nodes", "auth_type", "TEXT NOT NULL DEFAULT 'password'"); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if err := ensureColumn(db, "connection_nodes", "color", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
@@ -151,7 +173,7 @@ func (a *App) ListConnectionNodes() ([]SavedNode, error) {
 	if a.db == nil {
 		return nil, fmt.Errorf("本地连接库尚未就绪")
 	}
-	rows, err := a.db.Query(`SELECT id, parent_id, type, name, host, port, username, auth_type FROM connection_nodes ORDER BY type DESC, name COLLATE NOCASE`)
+	rows, err := a.db.Query(`SELECT id, parent_id, type, name, host, port, username, auth_type, color FROM connection_nodes ORDER BY type DESC, name COLLATE NOCASE`)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +181,7 @@ func (a *App) ListConnectionNodes() ([]SavedNode, error) {
 	nodes := []SavedNode{}
 	for rows.Next() {
 		var node SavedNode
-		if err := rows.Scan(&node.ID, &node.ParentID, &node.Type, &node.Name, &node.Host, &node.Port, &node.Username, &node.AuthType); err != nil {
+		if err := rows.Scan(&node.ID, &node.ParentID, &node.Type, &node.Name, &node.Host, &node.Port, &node.Username, &node.AuthType, &node.Color); err != nil {
 			return nil, err
 		}
 		nodes = append(nodes, node)
@@ -167,12 +189,78 @@ func (a *App) ListConnectionNodes() ([]SavedNode, error) {
 	return nodes, rows.Err()
 }
 
-func (a *App) CreateFolder(parentID int64, name string) (SavedNode, error) {
+func (a *App) CreateFolder(parentID int64, name string, color string) (SavedNode, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return SavedNode{}, fmt.Errorf("请输入文件夹名称")
 	}
-	return a.createNode(SavedNode{ParentID: parentID, Type: "folder", Name: name, Port: 22, AuthType: AuthPassword})
+	color, err := validateFolderColor(color)
+	if err != nil {
+		return SavedNode{}, err
+	}
+	return a.createNode(SavedNode{ParentID: parentID, Type: "folder", Name: name, Port: 22, AuthType: AuthPassword, Color: color})
+}
+
+// UpdateFolder 更新文件夹名称。
+func (a *App) UpdateFolder(id int64, name string, color string) (SavedNode, error) {
+	if a.db == nil {
+		return SavedNode{}, fmt.Errorf("本地连接库尚未就绪")
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return SavedNode{}, fmt.Errorf("请输入文件夹名称")
+	}
+	color, err := validateFolderColor(color)
+	if err != nil {
+		return SavedNode{}, err
+	}
+	var node SavedNode
+	if err := a.db.QueryRow(`SELECT id, parent_id, type, name, host, port, username, auth_type, color FROM connection_nodes WHERE id = ?`, id).
+		Scan(&node.ID, &node.ParentID, &node.Type, &node.Name, &node.Host, &node.Port, &node.Username, &node.AuthType, &node.Color); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return SavedNode{}, fmt.Errorf("文件夹不存在")
+		}
+		return SavedNode{}, err
+	}
+	if node.Type != "folder" {
+		return SavedNode{}, fmt.Errorf("只能编辑文件夹")
+	}
+	if _, err := a.db.Exec(`UPDATE connection_nodes SET name = ?, color = ? WHERE id = ?`, name, color, id); err != nil {
+		return SavedNode{}, err
+	}
+	node.Name = name
+	node.Color = color
+	return node, nil
+}
+
+// DeleteFolder 删除文件夹，文件夹中的连接保留并移到根目录。
+func (a *App) DeleteFolder(id int64) error {
+	if a.db == nil {
+		return fmt.Errorf("本地连接库尚未就绪")
+	}
+	var nodeType string
+	if err := a.db.QueryRow(`SELECT type FROM connection_nodes WHERE id = ?`, id).Scan(&nodeType); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("文件夹不存在")
+		}
+		return err
+	}
+	if nodeType != "folder" {
+		return fmt.Errorf("只能删除文件夹")
+	}
+	tx, err := a.db.Begin()
+	if err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`UPDATE connection_nodes SET parent_id = 0 WHERE parent_id = ?`, id); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	if _, err = tx.Exec(`DELETE FROM connection_nodes WHERE id = ?`, id); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
 }
 
 // CreateSSHLink 仅保存元数据。凭证（密码/私钥/私钥密码/私钥文件）走 SetCredential 写入 keyring。
@@ -254,8 +342,8 @@ func (a *App) CloneSSHLink(id int64) (SavedNode, error) {
 	}
 	var src SavedNode
 	var srcType string
-	if err := a.db.QueryRow(`SELECT id, parent_id, type, name, host, port, username, auth_type FROM connection_nodes WHERE id = ?`, id).
-		Scan(&src.ID, &src.ParentID, &srcType, &src.Name, &src.Host, &src.Port, &src.Username, &src.AuthType); err != nil {
+	if err := a.db.QueryRow(`SELECT id, parent_id, type, name, host, port, username, auth_type, color FROM connection_nodes WHERE id = ?`, id).
+		Scan(&src.ID, &src.ParentID, &srcType, &src.Name, &src.Host, &src.Port, &src.Username, &src.AuthType, &src.Color); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return SavedNode{}, fmt.Errorf("节点不存在")
 		}
@@ -409,8 +497,8 @@ func (a *App) MoveNode(id int64, parentID int64) (SavedNode, error) {
 		return SavedNode{}, fmt.Errorf("节点不存在")
 	}
 	var node SavedNode
-	if err := a.db.QueryRow(`SELECT id, parent_id, type, name, host, port, username, auth_type FROM connection_nodes WHERE id = ?`, id).
-		Scan(&node.ID, &node.ParentID, &node.Type, &node.Name, &node.Host, &node.Port, &node.Username, &node.AuthType); err != nil {
+	if err := a.db.QueryRow(`SELECT id, parent_id, type, name, host, port, username, auth_type, color FROM connection_nodes WHERE id = ?`, id).
+		Scan(&node.ID, &node.ParentID, &node.Type, &node.Name, &node.Host, &node.Port, &node.Username, &node.AuthType, &node.Color); err != nil {
 		return SavedNode{}, err
 	}
 	return node, nil
@@ -442,8 +530,15 @@ func (a *App) createNode(node SavedNode) (SavedNode, error) {
 	if node.AuthType == "" {
 		node.AuthType = AuthPassword
 	}
-	result, err := a.db.Exec(`INSERT INTO connection_nodes(parent_id, type, name, host, port, username, auth_type, created_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?)`,
-		node.ParentID, node.Type, node.Name, node.Host, node.Port, node.Username, node.AuthType, time.Now().Unix())
+	if node.Type == "folder" {
+		var err error
+		node.Color, err = validateFolderColor(node.Color)
+		if err != nil {
+			return SavedNode{}, err
+		}
+	}
+	result, err := a.db.Exec(`INSERT INTO connection_nodes(parent_id, type, name, host, port, username, auth_type, color, created_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		node.ParentID, node.Type, node.Name, node.Host, node.Port, node.Username, node.AuthType, node.Color, time.Now().Unix())
 	if err != nil {
 		return SavedNode{}, err
 	}

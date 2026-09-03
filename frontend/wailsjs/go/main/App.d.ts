@@ -22,6 +22,8 @@ export function FetchModels(arg1:string,arg2:string):Promise<Array<string>>;
 
 export function GetCredential(arg1:number):Promise<main.CredentialView>;
 
+export function GetSystemInfo(arg1:string):Promise<main.SystemInfo>;
+
 export function ListConnectionNodes():Promise<Array<main.SavedNode>>;
 
 export function ListSftp(arg1:string,arg2:string):Promise<Array<main.SftpEntry>>;

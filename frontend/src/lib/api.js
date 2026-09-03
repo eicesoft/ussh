@@ -16,6 +16,11 @@ export const api = {
   async resizeTerminal(tabId, size) {
     return appApi()?.ResizeTerminal(tabId, size);
   },
+  async getSystemInfo(tabId) {
+    const app = appApi();
+    if (!app?.GetSystemInfo) throw new Error('服务器信息服务不可用，请在 uSSH 应用中运行。');
+    return app.GetSystemInfo(tabId);
+  },
   async listConnectionNodes() {
     return appApi()?.ListConnectionNodes();
   },

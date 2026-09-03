@@ -31,10 +31,15 @@ type AgentOptions struct {
 
 // AgentContext 当前终端的机器信息，注入系统提示词。
 type AgentContext struct {
-	Host     string `json:"host"`
-	Username string `json:"username"`
-	Cwd      string `json:"cwd"`
-	OS       string `json:"os"`
+	Host         string `json:"host"`
+	Username     string `json:"username"`
+	Hostname     string `json:"hostname"`
+	OS           string `json:"os"`
+	Kernel       string `json:"kernel"`
+	Architecture string `json:"architecture"`
+	Shell        string `json:"shell"`
+	Cwd          string `json:"cwd"`
+	Uptime       string `json:"uptime"`
 }
 
 // AgentRequest 启动一次智能体任务。
@@ -483,8 +488,23 @@ func buildSystemPrompt(info AgentContext, options AgentOptions) string {
 	if info.OS != "" {
 		builder.WriteString(fmt.Sprintf("，系统：%s", info.OS))
 	}
+	if info.Hostname != "" {
+		builder.WriteString(fmt.Sprintf("，主机名：%s", info.Hostname))
+	}
+	if info.Kernel != "" {
+		builder.WriteString(fmt.Sprintf("，内核：%s", info.Kernel))
+	}
+	if info.Architecture != "" {
+		builder.WriteString(fmt.Sprintf("，架构：%s", info.Architecture))
+	}
+	if info.Shell != "" {
+		builder.WriteString(fmt.Sprintf("，Shell：%s", info.Shell))
+	}
 	if info.Cwd != "" {
 		builder.WriteString(fmt.Sprintf("，当前目录：%s", info.Cwd))
+	}
+	if info.Uptime != "" {
+		builder.WriteString(fmt.Sprintf("，运行时间：%s", info.Uptime))
 	}
 	builder.WriteString("。\n\n")
 

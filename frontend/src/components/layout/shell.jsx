@@ -268,6 +268,8 @@ export function Shell() {
         username: payload.username,
         authType: payload.authType,
         form: payload,
+        systemInfo: null,
+        systemInfoStatus: 'loading',
       });
       const term = termsRef.current[tabId];
       const size = term
@@ -280,6 +282,15 @@ export function Shell() {
         updateTab(tabId, tab => ({
           label: tab.name || `${payload.username || 'user'}@${payload.host}`,
         }));
+        // 连接成功后在独立 SSH session 中读取系统信息，既不污染用户终端，
+        // 也让 AI 面板可以展示并把同一份上下文传给智能体。
+        try {
+          const systemInfo = await api.getSystemInfo(tabId);
+          updateTab(tabId, { systemInfo, systemInfoStatus: 'ready' });
+        } catch (_) {
+          // 基础连接已经成功；系统信息探测失败不应影响终端使用。
+          updateTab(tabId, { systemInfoStatus: 'error' });
+        }
       } catch (e) {
         setGlobalStatus(`连接失败：${e}`);
         setTabStatus(tabId, reconnecting ? 'closed' : 'idle');
@@ -427,10 +438,11 @@ export function Shell() {
     activeTab,
     tabs,
     sendInput: handleSend,
+    updateTab,
     disconnect: disconnectTab,
     api,
     settings,
-  }), [activeTab, tabs, handleSend, disconnectTab, settings]);
+  }), [activeTab, tabs, handleSend, updateTab, disconnectTab, settings]);
 
   return (
     <main

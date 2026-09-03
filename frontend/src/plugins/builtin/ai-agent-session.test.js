@@ -1,8 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  createAgentHistoryEntry,
   createAgentSession,
+  readAgentHistories,
   readAgentSessions,
+  resetAgentSessionForMode,
   saveAgentSessions,
   updateAgentSession,
 } from './ai-agent-session.js';
@@ -54,3 +57,42 @@ test('persisted in-flight messages do not come back as a permanent loading state
   assert.equal(restored['tab-a'].sending, false);
 });
 
+test('switching between chat and agent mode resets the session state', () => {
+  const switched = resetAgentSessionForMode({
+    messages: [{ role: 'user', content: '旧任务' }],
+    content: '未发送的草稿',
+    sending: true,
+    error: '旧错误',
+    agentMode: false,
+    approval: { command: 'rm -rf /tmp/old' },
+    allowAll: true,
+  }, true);
+
+  assert.equal(switched.agentMode, true);
+  assert.deepEqual(switched.messages, []);
+  assert.equal(switched.content, '');
+  assert.equal(switched.sending, false);
+  assert.equal(switched.error, '');
+  assert.equal(switched.approval, null);
+  assert.equal(switched.allowAll, false);
+});
+
+test('history sessions persist and restore independently from the active session', () => {
+  const store = storage();
+  const historyEntry = createAgentHistoryEntry({
+    messages: [{ role: 'user', content: '查看服务状态' }],
+    agentMode: true,
+  }, 123);
+  saveAgentSessions(store, {
+    'tab-a': createAgentSession({ messages: [{ role: 'user', content: '当前会话' }] }),
+  }, ['tab-a'], { 'tab-a': [historyEntry] });
+
+  const restored = readAgentHistories(store, 'tab-a');
+  assert.equal(restored['tab-a'].length, 1);
+  assert.equal(restored['tab-a'][0].id, historyEntry.id);
+  assert.equal(restored['tab-a'][0].title, '查看服务状态');
+  assert.equal(restored['tab-a'][0].session.agentMode, true);
+  assert.deepEqual(readAgentSessions(store, 'tab-a')['tab-a'].messages, [
+    { role: 'user', content: '当前会话' },
+  ]);
+});

@@ -5,6 +5,7 @@ import { createContext, useContext } from 'react';
  * - activeTab: 当前激活的标签页
  * - tabs: 所有标签页列表
  * - sendInput: 向 SSH 连接发送输入
+ * - updateTab: 更新标签页状态（例如连接后的服务器信息）
  * - disconnect: 断开指定连接
  * - api: 底层 Go 桥接 API（connect, sendInput, resizeTerminal 等）
  * - settings: 当前应用设置（包括 AI 配置）

@@ -107,6 +107,14 @@
     max-width: 100%;
   }
 
+  .ai-agent-code-scrollbar {
+    scrollbar-width: thin;
+  }
+
+  .ai-agent-code-scrollbar::-webkit-scrollbar:horizontal {
+    height: 4px;
+  }
+
   .split-resizer {
     position: relative;
     isolation: isolate;

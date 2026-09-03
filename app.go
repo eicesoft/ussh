@@ -41,6 +41,23 @@ type TerminalSize struct {
 	Rows    int `json:"rows"`
 }
 
+// SystemInfo 是连接服务器的基础运行环境信息，供 AI 智能体建立会话上下文。
+// 信息通过独立 SSH session 读取，不会混入用户当前终端的输出。
+type SystemInfo struct {
+	Host         string `json:"host"`
+	Port         int    `json:"port"`
+	Username     string `json:"username"`
+	Hostname     string `json:"hostname"`
+	OS           string `json:"os"`
+	Kernel       string `json:"kernel"`
+	Architecture string `json:"architecture"`
+	Shell        string `json:"shell"`
+	Cwd          string `json:"cwd"`
+	Uptime       string `json:"uptime"`
+}
+
+const systemInfoCommand = `printf '%s\n' '__USSH_INFO_BEGIN__'; printf 'hostname=%s\n' "$(hostname 2>/dev/null || true)"; printf 'os=%s\n' "$(if [ -r /etc/os-release ]; then . /etc/os-release; printf '%s' "${PRETTY_NAME:-${NAME:-}}"; else uname -s 2>/dev/null || true; fi)"; printf 'kernel=%s\n' "$(uname -r 2>/dev/null || true)"; printf 'architecture=%s\n' "$(uname -m 2>/dev/null || true)"; printf 'shell=%s\n' "${SHELL:-}"; printf 'cwd=%s\n' "${PWD:-}"; printf 'uptime=%s\n' "$(uptime -p 2>/dev/null || uptime 2>/dev/null || true)"; printf '%s\n' '__USSH_INFO_END__'`
+
 // ToolCall 描述模型发起的一次工具调用。增量拼接时 Arguments 逐步追加。
 type ToolCall struct {
 	Index    int    `json:"index,omitempty"`
@@ -62,9 +79,12 @@ type AIChatMessage struct {
 }
 
 type sshConnection struct {
-	client  *ssh.Client
-	session *ssh.Session
-	input   io.WriteCloser
+	client   *ssh.Client
+	session  *ssh.Session
+	input    io.WriteCloser
+	host     string
+	port     int
+	username string
 }
 
 // App owns the active SSH terminal sessions, keyed by tabId.
@@ -77,9 +97,9 @@ type App struct {
 	aiRequests  map[string]context.CancelFunc
 	// taps 让 Go 侧也能收到终端输出（智能体靠它读回命令结果）。
 	// 回调必须非阻塞，否则会拖死 SSH 读循环。
-	tapMu   sync.Mutex
-	taps    map[string][]tapEntry
-	tapSeq  int64
+	tapMu  sync.Mutex
+	taps   map[string][]tapEntry
+	tapSeq int64
 	// agentRuns 保证同一终端同一时刻只有一条智能体命令在跑。
 	agentMu   sync.Mutex
 	agentRuns map[string]bool
@@ -243,12 +263,85 @@ func (a *App) Connect(tabId string, config ConnectionConfig, size TerminalSize) 
 		return "", fmt.Errorf("无法启动远程终端：%w", err)
 	}
 
-	conn := &sshConnection{client: client, session: session, input: input}
+	conn := &sshConnection{
+		client: client, session: session, input: input,
+		host: strings.TrimSpace(config.Host), port: config.Port, username: config.Username,
+	}
 	a.mu.Lock()
 	a.connections[tabId] = conn
 	a.mu.Unlock()
 	go a.watchSession(tabId, session)
 	return fmt.Sprintf("已连接到 %s", address), nil
+}
+
+// GetSystemInfo 读取当前 SSH 连接的基础系统信息，供智能体初始化上下文和界面展示。
+// 使用独立 session 执行固定命令，不改变用户终端的工作目录，也不会把探测输出写入终端。
+func (a *App) GetSystemInfo(tabId string) (SystemInfo, error) {
+	tabId = strings.TrimSpace(tabId)
+	if tabId == "" {
+		return SystemInfo{}, fmt.Errorf("tabId 不能为空")
+	}
+
+	a.mu.Lock()
+	conn, ok := a.connections[tabId]
+	if ok {
+		// 只复制连接元数据和 client 指针，避免在网络操作期间持有全局锁。
+		info := SystemInfo{Host: conn.host, Port: conn.port, Username: conn.username}
+		client := conn.client
+		a.mu.Unlock()
+
+		session, err := client.NewSession()
+		if err != nil {
+			return SystemInfo{}, fmt.Errorf("创建系统信息会话失败：%w", err)
+		}
+		defer session.Close()
+		output, err := session.CombinedOutput(systemInfoCommand)
+		if err != nil {
+			return SystemInfo{}, fmt.Errorf("读取服务器系统信息失败：%w", err)
+		}
+		return parseSystemInfo(info, string(output))
+	}
+	a.mu.Unlock()
+	return SystemInfo{}, fmt.Errorf("未建立 SSH 连接")
+}
+
+func parseSystemInfo(info SystemInfo, output string) (SystemInfo, error) {
+	values := map[string]*string{
+		"hostname":     &info.Hostname,
+		"os":           &info.OS,
+		"kernel":       &info.Kernel,
+		"architecture": &info.Architecture,
+		"shell":        &info.Shell,
+		"cwd":          &info.Cwd,
+		"uptime":       &info.Uptime,
+	}
+	inBlock := false
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSuffix(line, "\r")
+		switch line {
+		case "__USSH_INFO_BEGIN__":
+			inBlock = true
+			continue
+		case "__USSH_INFO_END__":
+			if !inBlock {
+				return SystemInfo{}, fmt.Errorf("服务器系统信息格式无效")
+			}
+			if info.Hostname == "" && info.OS == "" && info.Kernel == "" {
+				return SystemInfo{}, fmt.Errorf("未获取到服务器系统信息")
+			}
+			return info, nil
+		}
+		if !inBlock {
+			continue
+		}
+		key, value, found := strings.Cut(line, "=")
+		if found {
+			if target := values[key]; target != nil {
+				*target = strings.TrimSpace(value)
+			}
+		}
+	}
+	return SystemInfo{}, fmt.Errorf("服务器系统信息格式无效")
 }
 
 // loadCredential 按 authType 加载 keyring 中的对应字段（仅返回当前认证需要的字段）。

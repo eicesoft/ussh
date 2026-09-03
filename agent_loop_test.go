@@ -565,8 +565,11 @@ func TestNormalizeOptions(t *testing.T) {
 
 // TestBuildSystemPrompt 验证系统提示词包含关键约束。
 func TestBuildSystemPrompt(t *testing.T) {
-	prompt := buildSystemPrompt(AgentContext{Host: "db-1", Username: "ops", OS: "Ubuntu 22.04"}, AgentOptions{MaxSteps: 8, CommandTimeoutSec: 30})
-	for _, want := range []string{"ops@db-1", "Ubuntu 22.04", "ussh-action", "8", "30"} {
+	prompt := buildSystemPrompt(AgentContext{
+		Host: "db-1", Username: "ops", Hostname: "db-prod-01", OS: "Ubuntu 22.04",
+		Kernel: "6.8.0", Architecture: "aarch64", Shell: "/bin/bash", Cwd: "/srv/app", Uptime: "up 3 days",
+	}, AgentOptions{MaxSteps: 8, CommandTimeoutSec: 30})
+	for _, want := range []string{"ops@db-1", "db-prod-01", "Ubuntu 22.04", "6.8.0", "aarch64", "/bin/bash", "/srv/app", "up 3 days", "ussh-action", "8", "30"} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("系统提示词缺少 %q", want)
 		}

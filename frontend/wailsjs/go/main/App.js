@@ -42,6 +42,10 @@ export function GetCredential(arg1) {
   return window['go']['main']['App']['GetCredential'](arg1);
 }
 
+export function GetSystemInfo(arg1) {
+  return window['go']['main']['App']['GetSystemInfo'](arg1);
+}
+
 export function ListConnectionNodes() {
   return window['go']['main']['App']['ListConnectionNodes']();
 }

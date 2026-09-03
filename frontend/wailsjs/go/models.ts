@@ -78,8 +78,13 @@ export namespace main {
 	export class AgentContext {
 	    host: string;
 	    username: string;
-	    cwd: string;
+	    hostname: string;
 	    os: string;
+	    kernel: string;
+	    architecture: string;
+	    shell: string;
+	    cwd: string;
+	    uptime: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AgentContext(source);
@@ -89,8 +94,13 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.host = source["host"];
 	        this.username = source["username"];
-	        this.cwd = source["cwd"];
+	        this.hostname = source["hostname"];
 	        this.os = source["os"];
+	        this.kernel = source["kernel"];
+	        this.architecture = source["architecture"];
+	        this.shell = source["shell"];
+	        this.cwd = source["cwd"];
+	        this.uptime = source["uptime"];
 	    }
 	}
 	export class AgentOptions {
@@ -304,6 +314,36 @@ export namespace main {
 	        this.filename = source["filename"];
 	    }
 	}
+	export class SystemInfo {
+	    host: string;
+	    port: number;
+	    username: string;
+	    hostname: string;
+	    os: string;
+	    kernel: string;
+	    architecture: string;
+	    shell: string;
+	    cwd: string;
+	    uptime: string;
+
+	    static createFrom(source: any = {}) {
+	        return new SystemInfo(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.host = source["host"];
+	        this.port = source["port"];
+	        this.username = source["username"];
+	        this.hostname = source["hostname"];
+	        this.os = source["os"];
+	        this.kernel = source["kernel"];
+	        this.architecture = source["architecture"];
+	        this.shell = source["shell"];
+	        this.cwd = source["cwd"];
+	        this.uptime = source["uptime"];
+	    }
+	}
 	export class TerminalSize {
 	    columns: number;
 	    rows: number;
@@ -320,4 +360,3 @@ export namespace main {
 	}
 
 }
-

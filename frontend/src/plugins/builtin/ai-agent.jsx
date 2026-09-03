@@ -12,6 +12,7 @@ import {
   Copy,
   LoaderCircle,
   MessageSquarePlus,
+  Server,
   Play,
   Send,
   ShieldAlert,
@@ -26,7 +27,10 @@ import { registerPlugin } from '../registry';
 import { usePluginContext } from '../context';
 import {
   createAgentSession,
+  createAgentHistoryEntry,
+  readAgentHistories,
   readAgentSessions,
+  resetAgentSessionForMode,
   saveAgentSessions,
   updateAgentSession,
 } from './ai-agent-session';
@@ -104,7 +108,7 @@ function MarkdownCode({ className, children, node, onExecute, canExecute, ...pro
           </button>
         )}
       </div>
-      <pre className="overflow-x-auto p-2.5 text-[11px] leading-relaxed text-foreground">
+      <pre className="ai-agent-code-scrollbar overflow-x-auto p-2.5 text-[11px] leading-relaxed text-foreground">
         <code className="font-mono" {...props}>{code}</code>
       </pre>
     </div>
@@ -164,6 +168,41 @@ function runStatus(step) {
 function formatDuration(ms) {
   if (!ms || ms < 0) return '';
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
+}
+
+function ServerInfoCard({ tab }) {
+  const info = tab?.systemInfo;
+  if (!info) return null;
+
+  const rows = [
+    ['连接地址', `${info.host || tab.host || '未知'}${info.port && info.port !== 22 ? `:${info.port}` : ''}`],
+    ['主机名', info.hostname],
+    ['用户', info.username || tab.username],
+    ['系统', info.os],
+    ['内核', info.kernel],
+    ['架构', info.architecture],
+    ['Shell', info.shell],
+    ['当前目录', info.cwd],
+    ['运行时间', info.uptime],
+  ].filter(([, value]) => value);
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-border/70 bg-secondary/25">
+      <div className="flex items-center gap-1.5 border-b border-border/60 px-2.5 py-2">
+        <Server className="h-3.5 w-3.5 text-primary" />
+        <span className="text-[10px] font-semibold">服务器信息</span>
+        <span className="ml-auto text-[9px] text-muted-foreground">会话初始化</span>
+      </div>
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 px-2.5 py-2 text-[10px] leading-relaxed">
+        {rows.map(([label, value]) => (
+          <div key={label} className="contents">
+            <span className="text-muted-foreground">{label}</span>
+            <span className="min-w-0 break-words font-mono text-foreground/90">{value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function Message({ message, onCopy, onExecute, canExecute, pending }) {
@@ -411,13 +450,17 @@ function getBrowserStorage() {
 }
 
 function AIAgent() {
-  const { api, settings, activeTab, tabs, sendInput } = usePluginContext();
+  const { api, settings, activeTab, tabs, sendInput, updateTab } = usePluginContext();
   const ai = settings?.ai || {};
   const activeTabId = activeTab?.id;
   // 每条助手消息自带一组段落（segments）：文本与执行条按发生顺序交错排列，
   // 执行条因此落在模型说到它的位置。段落挂在消息上而不是另开一份按下标索引的状态，
   // 这样它随消息一起持久化，且不会因消息裁剪导致下标错位。
   const [sessions, setSessions] = useState(() => readAgentSessions(
+    getBrowserStorage(),
+    activeTabId,
+  ));
+  const [histories, setHistories] = useState(() => readAgentHistories(
     getBrowserStorage(),
     activeTabId,
   ));
@@ -453,9 +496,11 @@ function AIAgent() {
       getBrowserStorage(),
       sessions,
       tabs?.map(tab => tab.id),
+      histories,
     );
+    window.dispatchEvent(new Event('ai-agent-history-changed'));
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [sessions, tabs]);
+  }, [histories, sessions, tabs]);
 
   const updateAssistant = useCallback((tabId, assistantIndex, token) => {
     patchSession(tabId, current => ({
@@ -660,6 +705,18 @@ function AIAgent() {
       return;
     }
 
+    // 连接刚建立时系统信息可能仍在后台初始化；发送前补取一次，确保本轮
+    // 请求不会因为竞态而只拿到主机名和用户名。
+    let systemInfo = activeTab.systemInfo;
+    if (agentMode && !systemInfo && activeTab.systemInfoStatus !== 'error') {
+      try {
+        systemInfo = await api.getSystemInfo(tabId);
+        updateTab(tabId, { systemInfo, systemInfoStatus: 'ready' });
+      } catch (_) {
+        // 探测失败时仍允许智能体工作，系统提示词会保留连接基础信息。
+      }
+    }
+
     const model = selectedModel || ai.model;
     const userMessage = { role: 'user', content: prompt };
     const assistantIndex = session.messages.length + 1;
@@ -695,8 +752,15 @@ function AIAgent() {
             model,
             messages: nextMessages.filter(message => message.content),
             context: {
-              host: activeTab.host || '',
-              username: activeTab.username || '',
+              host: systemInfo?.host || activeTab.host || '',
+              username: systemInfo?.username || activeTab.username || '',
+              hostname: systemInfo?.hostname || '',
+              os: systemInfo?.os || '',
+              kernel: systemInfo?.kernel || '',
+              architecture: systemInfo?.architecture || '',
+              shell: systemInfo?.shell || '',
+              cwd: systemInfo?.cwd || '',
+              uptime: systemInfo?.uptime || '',
             },
             options: {
               autoApproveReadonly: ai.agent?.autoApproveReadonly !== false,
@@ -728,6 +792,8 @@ function AIAgent() {
   }, [
     activeTab?.host,
     activeTab?.id,
+    activeTab?.systemInfo,
+    activeTab?.systemInfoStatus,
     activeTab?.status,
     activeTab?.username,
     agentMode,
@@ -741,6 +807,7 @@ function AIAgent() {
     patchSession,
     sessions,
     selectedModel,
+    updateTab,
   ]);
 
   const stop = useCallback(() => {
@@ -768,8 +835,18 @@ function AIAgent() {
     api.resolveApproval(pending.requestId, decision === 'allow_all' ? 'allow' : decision).catch(() => {});
   }, [activeTabId, api, approval, patchSession]);
 
+  const archiveSession = useCallback((tabId, session) => {
+    if (!tabId || !session || (session.messages.length === 0 && !session.content.trim())) return;
+    const entry = createAgentHistoryEntry(session);
+    setHistories(current => ({
+      ...current,
+      [tabId]: [entry, ...(current[tabId] || [])].slice(0, 50),
+    }));
+  }, []);
+
   const clearChat = useCallback(() => {
     if (!activeTabId || activeSession.sending) return;
+    archiveSession(activeTabId, activeSession);
     patchSession(activeTabId, current => ({
       ...current,
       messages: [],
@@ -778,13 +855,41 @@ function AIAgent() {
       approval: null,
       allowAll: false,
     }));
-  }, [activeSession.sending, activeTabId, patchSession]);
+  }, [activeSession, activeSession.sending, activeTabId, archiveSession, patchSession]);
+
+  const toggleAgentMode = useCallback(() => {
+    if (!activeTabId || activeSession.sending) return;
+    archiveSession(activeTabId, activeSession);
+    patchSession(activeTabId, current => resetAgentSessionForMode(current, !current.agentMode));
+  }, [activeSession, activeTabId, archiveSession, patchSession]);
+
+  const selectHistory = useCallback(sessionId => {
+    if (!activeTabId || activeSession.sending || !sessionId) return;
+    const entry = (histories[activeTabId] || []).find(item => item.id === sessionId);
+    if (!entry) return;
+
+    archiveSession(activeTabId, activeSession);
+    setHistories(current => ({
+      ...current,
+      [activeTabId]: (current[activeTabId] || []).filter(item => item.id !== sessionId),
+    }));
+    patchSession(activeTabId, () => entry.session);
+  }, [activeSession, activeTabId, archiveSession, histories, patchSession]);
 
   useEffect(() => {
     const handleNewChat = () => clearChat();
     window.addEventListener('ai-agent-new-chat', handleNewChat);
     return () => window.removeEventListener('ai-agent-new-chat', handleNewChat);
   }, [clearChat]);
+
+  useEffect(() => {
+    const handleHistorySelect = event => {
+      if (event.detail?.tabId && event.detail.tabId !== activeTabId) return;
+      selectHistory(event.detail?.sessionId);
+    };
+    window.addEventListener('ai-agent-history-select', handleHistorySelect);
+    return () => window.removeEventListener('ai-agent-history-select', handleHistorySelect);
+  }, [activeTabId, selectHistory]);
 
   const copyMessage = useCallback(async text => {
     try {
@@ -809,6 +914,7 @@ function AIAgent() {
     <div className="flex h-full w-full min-h-0 min-w-0 flex-col bg-background/35">
       <ScrollArea className="ai-agent-scroll-area min-h-0 w-full flex-1">
         <div className="w-full min-w-0 max-w-full space-y-3 p-3">
+          <ServerInfoCard tab={activeTab} />
           {messages.length === 0 ? (
             <div className="flex min-h-36 flex-col items-center justify-center gap-2 px-5 text-center">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
@@ -900,10 +1006,10 @@ function AIAgent() {
                   ? 'border-primary/40 bg-primary/15 text-primary'
                   : 'border-border/70 text-muted-foreground hover:text-foreground'
               }`}
-              onClick={() => patchSession(activeTabId, current => ({ ...current, agentMode: !current.agentMode }))}
+              onClick={toggleAgentMode}
               disabled={sending}
               aria-pressed={agentMode}
-              title={agentMode ? '智能体会自动执行命令' : '仅对话，命令由你手动执行'}
+              title={`${agentMode ? '智能体会自动执行命令' : '仅对话，命令由你手动执行'}；切换将清空当前会话`}
             >
               <TerminalSquare className="h-3 w-3" />
               {agentMode ? '智能体' : '仅对话'}

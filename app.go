@@ -1,11 +1,16 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -36,10 +41,63 @@ type TerminalSize struct {
 	Rows    int `json:"rows"`
 }
 
+// SystemInfo 是连接服务器的基础运行环境信息，供 AI 智能体建立会话上下文。
+// 信息通过独立 SSH session 读取，不会混入用户当前终端的输出。
+type SystemInfo struct {
+	Host         string `json:"host"`
+	Port         int    `json:"port"`
+	Username     string `json:"username"`
+	Hostname     string `json:"hostname"`
+	OS           string `json:"os"`
+	Load         string `json:"load"`
+	Memory       string `json:"memory"`
+	Kernel       string `json:"kernel"`
+	Architecture string `json:"architecture"`
+	Shell        string `json:"shell"`
+	Cwd          string `json:"cwd"`
+	Uptime       string `json:"uptime"`
+}
+
+const systemInfoCommand = `
+printf '%s\n' '__USSH_INFO_BEGIN__'
+printf 'hostname=%s\n' "$(hostname 2>/dev/null || true)"
+printf 'os=%s\n' "$(if [ -r /etc/os-release ]; then . /etc/os-release; printf '%s' "${PRETTY_NAME:-${NAME:-}}"; else uname -s 2>/dev/null || true; fi)"
+printf 'load=%s\n' "$(if [ -r /proc/loadavg ]; then awk '{print $1}' /proc/loadavg 2>/dev/null; else uptime 2>/dev/null | awk -F'load averages?: ' '{print $2}' | awk '{print $1}'; fi)"
+printf 'memory=%s%%\n' "$(if [ -r /proc/meminfo ]; then awk '/MemTotal:/ {total=$2} /MemAvailable:/ {available=$2} END {if (total > 0) print int((total-available)*100/total+0.5)}' /proc/meminfo; elif command -v memory_pressure >/dev/null 2>&1; then memory_pressure -Q 2>/dev/null | awk -F': ' '/System-wide memory free percentage:/ {print int(100 - substr($2, 1, length($2)-1) + 0.5)}'; elif command -v vm_stat >/dev/null 2>&1 && command -v sysctl >/dev/null 2>&1; then total=$(sysctl -n hw.memsize 2>/dev/null); page_size=$(vm_stat | awk '/page size of/ {print $(NF-1)}'); used_pages=$(vm_stat | awk '/Pages active/ || /Pages wired down/ || /Pages occupied by compressor/ {print $NF}' | tr -d . | awk '{used += $1} END {print used+0}'); if [ -n \"$total\" ] && [ -n \"$page_size\" ] && [ \"$total\" -gt 0 ] 2>/dev/null; then awk -v used=\"$used_pages\" -v page=\"$page_size\" -v total=\"$total\" 'BEGIN {print int(used*page*100/total+0.5)}'; fi; fi)"
+printf 'kernel=%s\n' "$(uname -r 2>/dev/null || true)"
+printf 'architecture=%s\n' "$(uname -m 2>/dev/null || true)"
+printf 'shell=%s\n' "${SHELL:-}"
+printf 'cwd=%s\n' "${PWD:-}"
+printf 'uptime=%s\n' "$(uptime -p 2>/dev/null || uptime 2>/dev/null || true)"
+printf '%s\n' '__USSH_INFO_END__'`
+
+// ToolCall 描述模型发起的一次工具调用。增量拼接时 Arguments 逐步追加。
+type ToolCall struct {
+	Index    int    `json:"index,omitempty"`
+	ID       string `json:"id,omitempty"`
+	Type     string `json:"type,omitempty"`
+	Function struct {
+		Name      string `json:"name,omitempty"`
+		Arguments string `json:"arguments,omitempty"`
+	} `json:"function,omitempty"`
+}
+
+type AIChatMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+	// 以下字段供智能体的 function calling 模式使用，普通聊天不带。
+	ToolCallID string     `json:"tool_call_id,omitempty"`
+	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
+	Name       string     `json:"name,omitempty"`
+}
+
 type sshConnection struct {
-	client  *ssh.Client
-	session *ssh.Session
-	input   io.WriteCloser
+	client   *ssh.Client
+	session  *ssh.Session
+	input    io.WriteCloser
+	host     string
+	port     int
+	username string
 }
 
 // App owns the active SSH terminal sessions, keyed by tabId.
@@ -48,9 +106,49 @@ type App struct {
 	mu          sync.Mutex
 	connections map[string]*sshConnection
 	db          *sql.DB
+	aiMu        sync.Mutex
+	aiRequests  map[string]context.CancelFunc
+	// taps 让 Go 侧也能收到终端输出（智能体靠它读回命令结果）。
+	// 回调必须非阻塞，否则会拖死 SSH 读循环。
+	tapMu  sync.Mutex
+	taps   map[string][]tapEntry
+	tapSeq int64
+	// agentRuns 保证同一终端同一时刻只有一条智能体命令在跑。
+	agentMu   sync.Mutex
+	agentRuns map[string]bool
+	// agentApprovals 保存等待用户授权的通道，key 为 requestID。
+	agentApprovals map[string]chan string
+	// sendInputForTest 仅由单测替换，用于在不建立真实 SSH 连接的前提下驱动智能体。
+	sendInputForTest func(tabId string, data string) error
+	// emitForTest 仅由单测替换，用于捕获事件；运行时为 nil，走真实 runtime.EventsEmit。
+	emitForTest func(event string, payload map[string]any)
 }
 
-func NewApp() *App { return &App{connections: map[string]*sshConnection{}} }
+func (a *App) emitEvent(event string, payload map[string]any) {
+	if a.emitForTest != nil {
+		a.emitForTest(event, payload)
+		return
+	}
+	runtime.EventsEmit(a.ctx, event, payload)
+}
+
+// writeToTerminal 向终端写入数据，单测可借 sendInputForTest 接管。
+func (a *App) writeToTerminal(tabId string, data string) error {
+	if a.sendInputForTest != nil {
+		return a.sendInputForTest(tabId, data)
+	}
+	return a.SendInput(tabId, data)
+}
+
+func NewApp() *App {
+	return &App{
+		connections:    map[string]*sshConnection{},
+		aiRequests:     map[string]context.CancelFunc{},
+		taps:           map[string][]tapEntry{},
+		agentRuns:      map[string]bool{},
+		agentApprovals: map[string]chan string{},
+	}
+}
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	// macOS 上背景材质由窗口内注入的 NSVisualEffectView 实现，窗口就绪后应用。
@@ -62,6 +160,13 @@ func (a *App) startup(ctx context.Context) {
 	}
 }
 func (a *App) shutdown(ctx context.Context) {
+	a.aiMu.Lock()
+	for requestID, cancel := range a.aiRequests {
+		cancel()
+		delete(a.aiRequests, requestID)
+	}
+	a.aiMu.Unlock()
+
 	a.mu.Lock()
 	conns := make([]*sshConnection, 0, len(a.connections))
 	for _, c := range a.connections {
@@ -171,12 +276,87 @@ func (a *App) Connect(tabId string, config ConnectionConfig, size TerminalSize) 
 		return "", fmt.Errorf("无法启动远程终端：%w", err)
 	}
 
-	conn := &sshConnection{client: client, session: session, input: input}
+	conn := &sshConnection{
+		client: client, session: session, input: input,
+		host: strings.TrimSpace(config.Host), port: config.Port, username: config.Username,
+	}
 	a.mu.Lock()
 	a.connections[tabId] = conn
 	a.mu.Unlock()
 	go a.watchSession(tabId, session)
 	return fmt.Sprintf("已连接到 %s", address), nil
+}
+
+// GetSystemInfo 读取当前 SSH 连接的基础系统信息，供智能体初始化上下文和界面展示。
+// 使用独立 session 执行固定命令，不改变用户终端的工作目录，也不会把探测输出写入终端。
+func (a *App) GetSystemInfo(tabId string) (SystemInfo, error) {
+	tabId = strings.TrimSpace(tabId)
+	if tabId == "" {
+		return SystemInfo{}, fmt.Errorf("tabId 不能为空")
+	}
+
+	a.mu.Lock()
+	conn, ok := a.connections[tabId]
+	if ok {
+		// 只复制连接元数据和 client 指针，避免在网络操作期间持有全局锁。
+		info := SystemInfo{Host: conn.host, Port: conn.port, Username: conn.username}
+		client := conn.client
+		a.mu.Unlock()
+
+		session, err := client.NewSession()
+		if err != nil {
+			return SystemInfo{}, fmt.Errorf("创建系统信息会话失败：%w", err)
+		}
+		defer session.Close()
+		output, err := session.CombinedOutput(systemInfoCommand)
+		if err != nil {
+			return SystemInfo{}, fmt.Errorf("读取服务器系统信息失败：%w", err)
+		}
+		return parseSystemInfo(info, string(output))
+	}
+	a.mu.Unlock()
+	return SystemInfo{}, fmt.Errorf("未建立 SSH 连接")
+}
+
+func parseSystemInfo(info SystemInfo, output string) (SystemInfo, error) {
+	values := map[string]*string{
+		"hostname":     &info.Hostname,
+		"os":           &info.OS,
+		"load":         &info.Load,
+		"memory":       &info.Memory,
+		"kernel":       &info.Kernel,
+		"architecture": &info.Architecture,
+		"shell":        &info.Shell,
+		"cwd":          &info.Cwd,
+		"uptime":       &info.Uptime,
+	}
+	inBlock := false
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSuffix(line, "\r")
+		switch line {
+		case "__USSH_INFO_BEGIN__":
+			inBlock = true
+			continue
+		case "__USSH_INFO_END__":
+			if !inBlock {
+				return SystemInfo{}, fmt.Errorf("服务器系统信息格式无效")
+			}
+			if info.Hostname == "" && info.OS == "" && info.Kernel == "" {
+				return SystemInfo{}, fmt.Errorf("未获取到服务器系统信息")
+			}
+			return info, nil
+		}
+		if !inBlock {
+			continue
+		}
+		key, value, found := strings.Cut(line, "=")
+		if found {
+			if target := values[key]; target != nil {
+				*target = strings.TrimSpace(value)
+			}
+		}
+	}
+	return SystemInfo{}, fmt.Errorf("服务器系统信息格式无效")
 }
 
 // loadCredential 按 authType 加载 keyring 中的对应字段（仅返回当前认证需要的字段）。
@@ -338,5 +518,320 @@ type terminalEventWriter struct {
 
 func (w terminalEventWriter) Write(data []byte) (int, error) {
 	runtime.EventsEmit(w.app.ctx, "terminal-output", map[string]any{"tabId": w.tabId, "data": string(data)})
+	w.app.dispatchTap(w.tabId, data)
 	return len(data), nil
+}
+
+// tapEntry 带自增 token，让注销时能定位到自己（Go 的函数值不可比较）。
+type tapEntry struct {
+	token int64
+	fn    func([]byte)
+}
+
+// addTap 注册一个终端输出旁路，返回移除函数（可重复调用）。
+func (a *App) addTap(tabId string, fn func([]byte)) func() {
+	a.tapMu.Lock()
+	if a.taps == nil {
+		a.taps = map[string][]tapEntry{}
+	}
+	a.tapSeq++
+	token := a.tapSeq
+	a.taps[tabId] = append(a.taps[tabId], tapEntry{token: token, fn: fn})
+	a.tapMu.Unlock()
+
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			a.tapMu.Lock()
+			remaining := a.taps[tabId][:0]
+			for _, item := range a.taps[tabId] {
+				if item.token != token {
+					remaining = append(remaining, item)
+				}
+			}
+			if len(remaining) == 0 {
+				delete(a.taps, tabId)
+			} else {
+				a.taps[tabId] = remaining
+			}
+			a.tapMu.Unlock()
+		})
+	}
+}
+
+// dispatchTap 把终端输出转发给所有旁路消费者。
+// 这里复制一份切片后在锁外调用，避免回调里再触碰 taps 造成死锁。
+func (a *App) dispatchTap(tabId string, data []byte) {
+	a.tapMu.Lock()
+	list := make([]func([]byte), 0, len(a.taps[tabId]))
+	for _, entry := range a.taps[tabId] {
+		list = append(list, entry.fn)
+	}
+	a.tapMu.Unlock()
+	for _, fn := range list {
+		fn(data)
+	}
+}
+
+// FetchModels 从 OpenAI 兼容的 /models 端点获取模型列表。
+func (a *App) FetchModels(baseURL, apiKey string) ([]string, error) {
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if baseURL == "" {
+		return nil, fmt.Errorf("Base URL 不能为空")
+	}
+	req, err := http.NewRequestWithContext(a.ctx, http.MethodGet, baseURL+"/models", nil)
+	if err != nil {
+		return nil, fmt.Errorf("构造请求失败：%w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(apiKey))
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("请求模型列表失败：%w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("服务器返回状态码 %d", resp.StatusCode)
+	}
+	var body struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return nil, fmt.Errorf("解析模型列表失败：%w", err)
+	}
+	models := make([]string, 0, len(body.Data))
+	for _, m := range body.Data {
+		if m.ID != "" {
+			models = append(models, m.ID)
+		}
+	}
+	if len(models) == 0 {
+		return nil, fmt.Errorf("未获取到任何模型")
+	}
+	return models, nil
+}
+
+// StartAIChat 在 Go 端代理 OpenAI 兼容的流式聊天请求，避免 WebView 的 CORS 限制。
+// token、done、error 通过 Wails 事件回传给前端；requestID 用于区分并取消请求。
+func (a *App) StartAIChat(requestID, baseURL, apiKey, model string, messages []AIChatMessage) error {
+	requestID = strings.TrimSpace(requestID)
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	model = strings.TrimSpace(model)
+	if requestID == "" {
+		return fmt.Errorf("requestID 不能为空")
+	}
+	if baseURL == "" {
+		return fmt.Errorf("Base URL 不能为空")
+	}
+	if model == "" {
+		return fmt.Errorf("模型不能为空")
+	}
+	if len(messages) == 0 {
+		return fmt.Errorf("聊天内容不能为空")
+	}
+
+	requestContext := a.ctx
+	if requestContext == nil {
+		requestContext = context.Background()
+	}
+	requestContext, cancel := context.WithCancel(requestContext)
+	a.aiMu.Lock()
+	if a.aiRequests == nil {
+		a.aiRequests = map[string]context.CancelFunc{}
+	}
+	if previous, exists := a.aiRequests[requestID]; exists {
+		previous()
+	}
+	a.aiRequests[requestID] = cancel
+	a.aiMu.Unlock()
+
+	go func() {
+		defer func() {
+			a.aiMu.Lock()
+			delete(a.aiRequests, requestID)
+			a.aiMu.Unlock()
+		}()
+
+		err := streamAIChat(requestContext, baseURL, apiKey, model, messages, func(token string) {
+			runtime.EventsEmit(a.ctx, "ai-chat-token", map[string]string{
+				"requestId": requestID,
+				"token":     token,
+			})
+		})
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				runtime.EventsEmit(a.ctx, "ai-chat-done", map[string]any{
+					"requestId": requestID,
+					"stopped":   true,
+				})
+				return
+			}
+			runtime.EventsEmit(a.ctx, "ai-chat-error", map[string]string{
+				"requestId": requestID,
+				"error":     err.Error(),
+			})
+			return
+		}
+		runtime.EventsEmit(a.ctx, "ai-chat-done", map[string]string{"requestId": requestID})
+	}()
+	return nil
+}
+
+// StopAIChat 取消指定的 AI 聊天请求。
+func (a *App) StopAIChat(requestID string) error {
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return nil
+	}
+	a.aiMu.Lock()
+	cancel := a.aiRequests[requestID]
+	a.aiMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	return nil
+}
+
+func streamAIChat(ctx context.Context, baseURL, apiKey, model string, messages []AIChatMessage, onToken func(string)) error {
+	payload, err := json.Marshal(struct {
+		Model    string          `json:"model"`
+		Messages []AIChatMessage `json:"messages"`
+		Stream   bool            `json:"stream"`
+	}{Model: model, Messages: messages, Stream: true})
+	if err != nil {
+		return fmt.Errorf("构造 AI 请求失败：%w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/chat/completions", bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("构造 AI 请求失败：%w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if strings.TrimSpace(apiKey) != "" {
+		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(apiKey))
+	}
+
+	client := &http.Client{Timeout: 10 * time.Minute}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("请求 AI 服务失败：%w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 32*1024))
+		var detail struct {
+			Error struct {
+				Message string `json:"message"`
+			} `json:"error"`
+			Message string `json:"message"`
+		}
+		_ = json.Unmarshal(body, &detail)
+		message := detail.Error.Message
+		if message == "" {
+			message = detail.Message
+		}
+		if message == "" {
+			message = strings.TrimSpace(string(body))
+		}
+		if message == "" {
+			message = fmt.Sprintf("服务器返回状态码 %d", resp.StatusCode)
+		}
+		return fmt.Errorf("AI 服务请求失败：%s", message)
+	}
+
+	if !strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("读取 AI 响应失败：%w", err)
+		}
+		var completion struct {
+			Choices []struct {
+				Message struct {
+					Content string `json:"content"`
+				} `json:"message"`
+			} `json:"choices"`
+		}
+		if err := json.Unmarshal(body, &completion); err != nil {
+			return fmt.Errorf("解析 AI 响应失败：%w", err)
+		}
+		if len(completion.Choices) > 0 && completion.Choices[0].Message.Content != "" {
+			onToken(completion.Choices[0].Message.Content)
+		}
+		return nil
+	}
+
+	return scanSSEStream(resp.Body, func(chunk sseChunk) {
+		if chunk.Content != "" {
+			onToken(chunk.Content)
+		}
+	})
+}
+
+// sseChunk 覆盖 /chat/completions 流式响应里我们关心的字段。
+// content 供普通聊天使用，tool_calls 与 finish_reason 供智能体的 function calling 模式使用。
+type sseChunk struct {
+	Content      string     // delta.content 或 message.content，已按优先级合并
+	ToolCalls    []ToolCall // delta.tool_calls 或 message.tool_calls
+	FinishReason string
+}
+
+// scanSSEStream 逐行解析 SSE，把每个 data 块交给 onChunk。
+// 普通聊天与智能体共用这一份解析，避免两条路径的解析逻辑漂移。
+func scanSSEStream(body io.Reader, onChunk func(sseChunk)) error {
+	type choice struct {
+		Delta struct {
+			Content   string     `json:"content"`
+			ToolCalls []ToolCall `json:"tool_calls"`
+		} `json:"delta"`
+		Message struct {
+			Content   string     `json:"content"`
+			ToolCalls []ToolCall `json:"tool_calls"`
+		} `json:"message"`
+		FinishReason string `json:"finish_reason"`
+	}
+
+	scanner := bufio.NewScanner(body)
+	scanner.Buffer(make([]byte, 4096), 1024*1024)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if data == "" || data == "[DONE]" {
+			continue
+		}
+		// payload 必须每轮新建：复用同一结构体时 json.Unmarshal 不会清空
+		// 切片字段，tool_calls 会被反复追加。
+		var payload struct {
+			Choices []choice `json:"choices"`
+		}
+		if err := json.Unmarshal([]byte(data), &payload); err != nil {
+			continue
+		}
+		if len(payload.Choices) == 0 {
+			continue
+		}
+		choice := payload.Choices[0]
+		chunk := sseChunk{
+			Content:      choice.Delta.Content,
+			ToolCalls:    choice.Delta.ToolCalls,
+			FinishReason: choice.FinishReason,
+		}
+		if chunk.Content == "" {
+			chunk.Content = choice.Message.Content
+		}
+		if len(chunk.ToolCalls) == 0 {
+			chunk.ToolCalls = choice.Message.ToolCalls
+		}
+		onChunk(chunk)
+	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("读取 AI 流式响应失败：%w", err)
+	}
+	return nil
 }

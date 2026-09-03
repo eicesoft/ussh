@@ -23,6 +23,9 @@
     --border: 215 22% 87%;
     --input: 215 22% 87%;
     --ring: 158 72% 35%;
+    --splitter: 215 22% 87%;
+    --splitter-hover: 158 72% 35%;
+    --splitter-active: 158 72% 30%;
     --radius: 0.5rem;
     --density-tab-height: 30px;
     --density-tab-padding-x: 8px;
@@ -79,6 +82,146 @@
     --border: 222 20% 22%;
     --input: 222 20% 22%;
     --ring: 158 64% 42%;
+    --splitter: 222 20% 30%;
+    --splitter-hover: 158 64% 55%;
+    --splitter-active: 158 64% 62%;
+  }
+}
+
+@layer components {
+  /* 顶部与左右工具面板共享的亚克力材质：约 70% 透出窗口背景。 */
+  .acrylic-panel {
+    --acrylic-opacity: 0.3;
+    color: hsl(var(--foreground));
+    background: hsl(var(--background) / var(--acrylic-opacity));
+    -webkit-backdrop-filter: blur(24px) saturate(120%);
+    backdrop-filter: blur(24px) saturate(120%);
+  }
+
+  /* Radix ScrollArea uses a table-like content wrapper for intrinsic sizing.
+     Long AI commands must not turn that intrinsic width into a wider sidebar. */
+  .ai-agent-scroll-area [data-radix-scroll-area-viewport] > div {
+    display: block !important;
+    width: 100%;
+    min-width: 0 !important;
+    max-width: 100%;
+  }
+
+  /* Docker 面板同样使用 Radix ScrollArea；将其默认的 table 内容容器改为受约束的块，
+     避免 Compose 配置文件路径把项目卡片和边栏撑宽。 */
+  .docker-scroll-area [data-radix-scroll-area-viewport] > div {
+    display: block !important;
+    width: 100%;
+    height: 100%;
+    min-width: 0 !important;
+    max-width: 100%;
+  }
+
+  .docker-scroll-area [data-radix-scroll-area-scrollbar] {
+    z-index: 20;
+  }
+
+  /* 监控表格需要保留滚动能力，但滚动条尽量不占空间、不抢视觉焦点。 */
+  .monitor-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+  }
+
+  .monitor-scrollbar::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  .monitor-scrollbar::-webkit-scrollbar-track,
+  .monitor-scrollbar::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  .monitor-scrollbar::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background: rgba(148, 163, 184, 0.45);
+  }
+
+  .monitor-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.65);
+  }
+
+  /* 总览页滚动条与监控面板保持一致，避免使用浏览器默认的宽滚动条。 */
+  .dashboard-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+  }
+
+  .dashboard-scrollbar::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  .dashboard-scrollbar::-webkit-scrollbar-track,
+  .dashboard-scrollbar::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  .dashboard-scrollbar::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background: rgba(148, 163, 184, 0.45);
+  }
+
+  .dashboard-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.65);
+  }
+
+  .ai-agent-code-scrollbar {
+    scrollbar-width: thin;
+  }
+
+  .ai-agent-code-scrollbar::-webkit-scrollbar:horizontal {
+    height: 4px;
+  }
+
+  .split-resizer {
+    position: relative;
+    isolation: isolate;
+    /* 相邻面板（.terminal-panel）带 transform，会进入同一绘制层且在其之后绘制，
+       故显式抬高层级，保证悬停光带不被覆盖。 */
+    z-index: 1;
+    width: 1px;
+    cursor: col-resize;
+    background-color: hsl(var(--splitter));
+    transition: background-color 150ms ease;
+  }
+
+  /* 保持分隔线纤细，同时扩大可拖拽的鼠标命中区域。 */
+  .split-resizer::before {
+    position: absolute;
+    inset: 0 -3px;
+    content: '';
+    cursor: col-resize;
+  }
+
+  /* 悬停/拖拽的高亮层：与主线同宽（1px），只靠外发光表现，避免线变粗。 */
+  .split-resizer::after {
+    position: absolute;
+    inset: 0;
+    content: '';
+    pointer-events: none;
+    background-color: transparent;
+    transition: background-color 150ms ease, box-shadow 150ms ease;
+  }
+
+  /* data-separator 由库写入，取值为 inactive / hover / active / focus。
+     注意不要用 [data-separator='focus']：鼠标拖拽结束后焦点仍留在分隔条上，
+     会导致高亮一直不消失；:focus-visible 只在键盘导航时命中。 */
+  .split-resizer:hover::after,
+  .split-resizer[data-separator='hover']::after,
+  .split-resizer:focus-visible::after {
+    background-color: hsl(var(--splitter-hover));
+    box-shadow: 0 0 3px hsl(var(--splitter-hover) / 0.7);
+  }
+
+  .split-resizer[data-separator='active']::after {
+    background-color: hsl(var(--splitter-active));
+    box-shadow: 0 0 3px hsl(var(--splitter-active) / 0.9);
   }
 }
 

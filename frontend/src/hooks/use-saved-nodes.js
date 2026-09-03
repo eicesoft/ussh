@@ -3,19 +3,41 @@ import { api } from '@/lib/api';
 
 export function useSavedNodes() {
   const [nodes, setNodes] = useState([]);
+  const [loaded, setLoaded] = useState(false);
 
   const reload = useCallback(async () => {
-    const list = await api.listConnectionNodes();
-    setNodes(list || []);
+    try {
+      const list = await api.listConnectionNodes();
+      setNodes(list || []);
+    } finally {
+      setLoaded(true);
+    }
   }, []);
 
   useEffect(() => {
-    reload().catch(() => {});
+    reload().catch(() => setLoaded(true));
   }, [reload]);
 
   const createFolder = useCallback(
-    async name => {
-      await api.createFolder(0, name);
+    async (parentId, name, color) => {
+      await api.createFolder(Number(parentId) || 0, name, color);
+      await reload();
+    },
+    [reload],
+  );
+
+  const updateFolder = useCallback(
+    async (id, name, color) => {
+      const updated = await api.updateFolder(id, name, color);
+      await reload();
+      return updated;
+    },
+    [reload],
+  );
+
+  const deleteFolder = useCallback(
+    async id => {
+      await api.deleteFolder(id);
       await reload();
     },
     [reload],
@@ -33,6 +55,14 @@ export function useSavedNodes() {
   const moveNode = useCallback(
     async (id, parentId) => {
       await api.moveNode(id, parentId);
+      await reload();
+    },
+    [reload],
+  );
+
+  const reorderNodes = useCallback(
+    async (parentId, orderedIds) => {
+      await api.reorderNodes(parentId, orderedIds);
       await reload();
     },
     [reload],
@@ -66,10 +96,14 @@ export function useSavedNodes() {
 
   return {
     nodes,
+    loaded,
     reload,
     createFolder,
+    updateFolder,
+    deleteFolder,
     createSSHLink,
     moveNode,
+    reorderNodes,
     updateSSHLink,
     cloneSSHLink,
     deleteSSHLink,

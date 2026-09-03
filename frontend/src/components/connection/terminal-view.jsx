@@ -4,17 +4,25 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { ClipboardGetText } from '../../../wailsjs/runtime/runtime';
 
-export function TerminalView({ tab, onSend, onResize, onFocus, onTermReady, terminalSettings }) {
+export function TerminalView({ tab, active = true, onSend, onResize, onFocus, onTermReady, onReconnect, terminalSettings }) {
   const hostRef = useRef(null);
   const termRef = useRef(null);
   const fitRef = useRef(null);
   const scrollTimerRef = useRef(null);
   const terminalSettingsRef = useRef(terminalSettings);
+  const tabStatusRef = useRef(tab.status);
+  const reconnectRef = useRef(onReconnect);
   const [ready, setReady] = useState(false);
+
+  tabStatusRef.current = tab.status;
 
   useEffect(() => {
     terminalSettingsRef.current = terminalSettings;
   }, [terminalSettings]);
+
+  useEffect(() => {
+    reconnectRef.current = onReconnect;
+  }, [onReconnect]);
 
   useEffect(() => {
     if (!hostRef.current) return;
@@ -23,7 +31,13 @@ export function TerminalView({ tab, onSend, onResize, onFocus, onTermReady, term
       fontFamily: 'Menlo, Consolas, "Courier New", monospace',
       fontSize: terminalSettings?.fontSize ?? 13,
       // 画布背景完全透明：透明度由外层终端容器统一承担，文字保持不透明。
-      theme: { background: '#0b122000', foreground: '#e2e8f0' },
+      theme: {
+        background: '#0b122000',
+        foreground: '#e2e8f0',
+        selectionBackground: '#5f718a',
+        selectionForeground: '#ffffff',
+        selectionInactiveBackground: '#52647c',
+      },
       allowTransparency: true,
       allowProposedApi: true,
       scrollback: terminalSettings?.scrollback ?? 5000,
@@ -74,6 +88,14 @@ export function TerminalView({ tab, onSend, onResize, onFocus, onTermReady, term
     const selectionDisposable = term.onSelectionChange(copySelection);
     const screen = hostRef.current.querySelector('.xterm-screen');
     screen?.addEventListener('contextmenu', pasteOnRightClick, true);
+
+    term.attachCustomKeyEventHandler(event => {
+      const isPlainEnter = event.key === 'Enter' && !event.altKey && !event.ctrlKey && !event.metaKey;
+      if (event.type !== 'keydown' || !isPlainEnter || tabStatusRef.current !== 'closed') return true;
+      event.preventDefault();
+      reconnectRef.current?.();
+      return false;
+    });
 
     setReady(true);
 
@@ -139,17 +161,17 @@ export function TerminalView({ tab, onSend, onResize, onFocus, onTermReady, term
   }, [ready, tab.status]);
 
   useEffect(() => {
-    if (ready && termRef.current && tab.id) {
+    if (active && ready && termRef.current && tab.id) {
       try {
         termRef.current.focus();
       } catch (_) {}
       onFocus();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, tab.id]);
+  }, [active, ready, tab.id]);
 
   return (
-    <div className="relative h-full w-full overflow-hidden">
+    <div className="app-no-drag relative h-full w-full overflow-hidden">
       <div ref={hostRef} className="terminal-host" />
       {tab.status === 'connecting' && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[#0b1220]/90">

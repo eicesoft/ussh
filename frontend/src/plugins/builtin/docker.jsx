@@ -4,6 +4,7 @@ import {
   Box,
   ChevronDown,
   CircleStop,
+  Container,
   Database,
   HardDrive,
   Info,
@@ -13,7 +14,6 @@ import {
   RefreshCw,
   RotateCw,
   Server,
-  SquareTerminal,
   Trash2,
 } from 'lucide-react';
 import { registerPlugin } from '../registry';
@@ -617,6 +617,6 @@ registerPlugin({
   id: 'docker',
   type: 'tool',
   title: 'Docker',
-  icon: SquareTerminal,
+  icon: Container,
   component: DockerPlugin,
 });

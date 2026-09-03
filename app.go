@@ -1,11 +1,16 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -36,6 +41,11 @@ type TerminalSize struct {
 	Rows    int `json:"rows"`
 }
 
+type AIChatMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
 type sshConnection struct {
 	client  *ssh.Client
 	session *ssh.Session
@@ -48,9 +58,16 @@ type App struct {
 	mu          sync.Mutex
 	connections map[string]*sshConnection
 	db          *sql.DB
+	aiMu        sync.Mutex
+	aiRequests  map[string]context.CancelFunc
 }
 
-func NewApp() *App { return &App{connections: map[string]*sshConnection{}} }
+func NewApp() *App {
+	return &App{
+		connections: map[string]*sshConnection{},
+		aiRequests:  map[string]context.CancelFunc{},
+	}
+}
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	// macOS 上背景材质由窗口内注入的 NSVisualEffectView 实现，窗口就绪后应用。
@@ -62,6 +79,13 @@ func (a *App) startup(ctx context.Context) {
 	}
 }
 func (a *App) shutdown(ctx context.Context) {
+	a.aiMu.Lock()
+	for requestID, cancel := range a.aiRequests {
+		cancel()
+		delete(a.aiRequests, requestID)
+	}
+	a.aiMu.Unlock()
+
 	a.mu.Lock()
 	conns := make([]*sshConnection, 0, len(a.connections))
 	for _, c := range a.connections {
@@ -339,4 +363,236 @@ type terminalEventWriter struct {
 func (w terminalEventWriter) Write(data []byte) (int, error) {
 	runtime.EventsEmit(w.app.ctx, "terminal-output", map[string]any{"tabId": w.tabId, "data": string(data)})
 	return len(data), nil
+}
+
+// FetchModels 从 OpenAI 兼容的 /models 端点获取模型列表。
+func (a *App) FetchModels(baseURL, apiKey string) ([]string, error) {
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if baseURL == "" {
+		return nil, fmt.Errorf("Base URL 不能为空")
+	}
+	req, err := http.NewRequestWithContext(a.ctx, http.MethodGet, baseURL+"/models", nil)
+	if err != nil {
+		return nil, fmt.Errorf("构造请求失败：%w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(apiKey))
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("请求模型列表失败：%w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("服务器返回状态码 %d", resp.StatusCode)
+	}
+	var body struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return nil, fmt.Errorf("解析模型列表失败：%w", err)
+	}
+	models := make([]string, 0, len(body.Data))
+	for _, m := range body.Data {
+		if m.ID != "" {
+			models = append(models, m.ID)
+		}
+	}
+	if len(models) == 0 {
+		return nil, fmt.Errorf("未获取到任何模型")
+	}
+	return models, nil
+}
+
+// StartAIChat 在 Go 端代理 OpenAI 兼容的流式聊天请求，避免 WebView 的 CORS 限制。
+// token、done、error 通过 Wails 事件回传给前端；requestID 用于区分并取消请求。
+func (a *App) StartAIChat(requestID, baseURL, apiKey, model string, messages []AIChatMessage) error {
+	requestID = strings.TrimSpace(requestID)
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	model = strings.TrimSpace(model)
+	if requestID == "" {
+		return fmt.Errorf("requestID 不能为空")
+	}
+	if baseURL == "" {
+		return fmt.Errorf("Base URL 不能为空")
+	}
+	if model == "" {
+		return fmt.Errorf("模型不能为空")
+	}
+	if len(messages) == 0 {
+		return fmt.Errorf("聊天内容不能为空")
+	}
+
+	requestContext := a.ctx
+	if requestContext == nil {
+		requestContext = context.Background()
+	}
+	requestContext, cancel := context.WithCancel(requestContext)
+	a.aiMu.Lock()
+	if a.aiRequests == nil {
+		a.aiRequests = map[string]context.CancelFunc{}
+	}
+	if previous, exists := a.aiRequests[requestID]; exists {
+		previous()
+	}
+	a.aiRequests[requestID] = cancel
+	a.aiMu.Unlock()
+
+	go func() {
+		defer func() {
+			a.aiMu.Lock()
+			delete(a.aiRequests, requestID)
+			a.aiMu.Unlock()
+		}()
+
+		err := streamAIChat(requestContext, baseURL, apiKey, model, messages, func(token string) {
+			runtime.EventsEmit(a.ctx, "ai-chat-token", map[string]string{
+				"requestId": requestID,
+				"token":     token,
+			})
+		})
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				runtime.EventsEmit(a.ctx, "ai-chat-done", map[string]any{
+					"requestId": requestID,
+					"stopped":   true,
+				})
+				return
+			}
+			runtime.EventsEmit(a.ctx, "ai-chat-error", map[string]string{
+				"requestId": requestID,
+				"error":     err.Error(),
+			})
+			return
+		}
+		runtime.EventsEmit(a.ctx, "ai-chat-done", map[string]string{"requestId": requestID})
+	}()
+	return nil
+}
+
+// StopAIChat 取消指定的 AI 聊天请求。
+func (a *App) StopAIChat(requestID string) error {
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return nil
+	}
+	a.aiMu.Lock()
+	cancel := a.aiRequests[requestID]
+	a.aiMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	return nil
+}
+
+func streamAIChat(ctx context.Context, baseURL, apiKey, model string, messages []AIChatMessage, onToken func(string)) error {
+	payload, err := json.Marshal(struct {
+		Model    string          `json:"model"`
+		Messages []AIChatMessage `json:"messages"`
+		Stream   bool            `json:"stream"`
+	}{Model: model, Messages: messages, Stream: true})
+	if err != nil {
+		return fmt.Errorf("构造 AI 请求失败：%w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/chat/completions", bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("构造 AI 请求失败：%w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if strings.TrimSpace(apiKey) != "" {
+		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(apiKey))
+	}
+
+	client := &http.Client{Timeout: 10 * time.Minute}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("请求 AI 服务失败：%w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 32*1024))
+		var detail struct {
+			Error struct {
+				Message string `json:"message"`
+			} `json:"error"`
+			Message string `json:"message"`
+		}
+		_ = json.Unmarshal(body, &detail)
+		message := detail.Error.Message
+		if message == "" {
+			message = detail.Message
+		}
+		if message == "" {
+			message = strings.TrimSpace(string(body))
+		}
+		if message == "" {
+			message = fmt.Sprintf("服务器返回状态码 %d", resp.StatusCode)
+		}
+		return fmt.Errorf("AI 服务请求失败：%s", message)
+	}
+
+	if !strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("读取 AI 响应失败：%w", err)
+		}
+		var completion struct {
+			Choices []struct {
+				Message struct {
+					Content string `json:"content"`
+				} `json:"message"`
+			} `json:"choices"`
+		}
+		if err := json.Unmarshal(body, &completion); err != nil {
+			return fmt.Errorf("解析 AI 响应失败：%w", err)
+		}
+		if len(completion.Choices) > 0 && completion.Choices[0].Message.Content != "" {
+			onToken(completion.Choices[0].Message.Content)
+		}
+		return nil
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 4096), 1024*1024)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if data == "" || data == "[DONE]" {
+			continue
+		}
+		var chunk struct {
+			Choices []struct {
+				Delta struct {
+					Content string `json:"content"`
+				} `json:"delta"`
+				Message struct {
+					Content string `json:"content"`
+				} `json:"message"`
+			} `json:"choices"`
+		}
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			continue
+		}
+		if len(chunk.Choices) == 0 {
+			continue
+		}
+		token := chunk.Choices[0].Delta.Content
+		if token == "" {
+			token = chunk.Choices[0].Message.Content
+		}
+		if token != "" {
+			onToken(token)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("读取 AI 流式响应失败：%w", err)
+	}
+	return nil
 }

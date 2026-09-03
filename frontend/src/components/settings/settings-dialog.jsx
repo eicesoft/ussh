@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Palette, Settings, Terminal } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Bot, Check, Eye, Palette, RefreshCw, Search, Settings, Terminal } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -9,10 +9,18 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { api } from '@/lib/api';
 
 const themeOptions = [
   ['system', '跟随系统'],
@@ -35,6 +43,18 @@ const scrollbackOptions = [1000, 5000, 10000, 20000];
 export function SettingsDialog({ open, anchorRef, onClose, settings, onSave }) {
   const [draft, setDraft] = useState(settings);
   const [animationOrigin, setAnimationOrigin] = useState({ x: 0, y: 0 });
+  const [models, setModels] = useState([]);
+  const [modelLoading, setModelLoading] = useState(false);
+  const [modelError, setModelError] = useState('');
+  const [modelSearch, setModelSearch] = useState('');
+
+  const visibleModels = useMemo(() => {
+    const saved = draft.ai?.visibleModels || [];
+    if (saved.length === 0) return models;
+    // 一旦用户开始筛选，只展示用户选择的模型。
+    const savedSet = new Set(saved);
+    return models.filter(m => savedSet.has(m));
+  }, [models, draft.ai?.visibleModels]);
 
   useEffect(() => {
     if (open) setDraft(settings);
@@ -63,6 +83,56 @@ export function SettingsDialog({ open, anchorRef, onClose, settings, onSave }) {
   const updateTerminalDraft = (key, value) => {
     setDraft(current => ({ ...current, terminal: { ...current.terminal, [key]: value } }));
   };
+  const updateAIDraft = (key, value) => {
+    setDraft(current => ({ ...current, ai: { ...current.ai, [key]: value } }));
+    if (key === 'baseURL') {
+      setModels([]);
+      setModelError('');
+    }
+  };
+  const fetchModels = async () => {
+    const baseURL = draft.ai?.baseURL?.trim();
+    if (!baseURL) {
+      setModelError('请先填写 Base URL');
+      return;
+    }
+    setModelLoading(true);
+    setModelError('');
+    try {
+      const list = await api.fetchModels(baseURL, draft.ai?.apiKey || '');
+      setModels(list);
+      if (!draft.ai?.model || !list.includes(draft.ai.model)) {
+        updateAIDraft('model', list[0] || '');
+      }
+    } catch (e) {
+      setModelError(String(e));
+    } finally {
+      setModelLoading(false);
+    }
+  };
+  const toggleModelVisibility = (modelName) => {
+    setDraft(previous => {
+      const current = previous.ai?.visibleModels || [];
+      const next = current.includes(modelName)
+        ? current.filter(m => m !== modelName)
+        : [...current, modelName];
+      return {
+        ...previous,
+        ai: {
+          ...previous.ai,
+          visibleModels: next,
+          // 首次筛选或隐藏当前模型时，保证主选择框始终指向可见模型。
+          model: next.length > 0 && !next.includes(previous.ai?.model)
+            ? next[0]
+            : previous.ai?.model,
+        },
+      };
+    });
+  };
+  const allModelsVisible = models.length > 0 && (draft.ai?.visibleModels || []).length === 0;
+  const filteredModels = models.filter(modelName =>
+    modelName.toLocaleLowerCase().includes(modelSearch.trim().toLocaleLowerCase()),
+  );
   const save = () => {
     onSave(draft);
     onClose();
@@ -93,6 +163,10 @@ export function SettingsDialog({ open, anchorRef, onClose, settings, onSave }) {
             <TabsTrigger value="terminal" className="flex-1 gap-2">
               <Terminal className="h-4 w-4" />
               终端
+            </TabsTrigger>
+            <TabsTrigger value="ai" className="flex-1 gap-2">
+              <Bot className="h-4 w-4" />
+              AI 智能体
             </TabsTrigger>
           </TabsList>
 
@@ -165,6 +239,105 @@ export function SettingsDialog({ open, anchorRef, onClose, settings, onSave }) {
             <SettingRow label="右键直接粘贴" description="在终端内点击右键时粘贴剪贴板内容。">
               <Switch checked={draft.terminal.rightClickPaste} onCheckedChange={value => updateTerminalDraft('rightClickPaste', value)} aria-label="右键直接粘贴" />
             </SettingRow>
+          </TabsContent>
+
+          <TabsContent value="ai" className="mt-4 space-y-4">
+            <SettingRow label="Base URL" description="OpenAI 兼容的 API 地址，例如 https://api.openai.com/v1。">
+              <Input
+                className="w-52"
+                placeholder="https://api.openai.com/v1"
+                value={draft.ai?.baseURL || ''}
+                onChange={e => updateAIDraft('baseURL', e.target.value)}
+              />
+            </SettingRow>
+            <SettingRow label="API Key" description="用于认证的 API 密钥，留空则不发送 Authorization 头。">
+              <Input
+                className="w-52"
+                type="password"
+                placeholder="sk-..."
+                value={draft.ai?.apiKey || ''}
+                onChange={e => updateAIDraft('apiKey', e.target.value)}
+              />
+            </SettingRow>
+            <SettingRow label="模型" description="选择要使用的 AI 模型。">
+              <div className="flex items-center gap-2">
+                <Select
+                  value={draft.ai?.model || ''}
+                  onValueChange={value => updateAIDraft('model', value)}
+                  disabled={visibleModels.length === 0}
+                >
+                  <SelectTrigger className="w-40"><SelectValue placeholder="请先获取模型列表" /></SelectTrigger>
+                  <SelectContent>
+                    {visibleModels.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={fetchModels}
+                  disabled={modelLoading || !draft.ai?.baseURL?.trim()}
+                  aria-label="刷新模型列表"
+                >
+                  <RefreshCw className={modelLoading ? 'animate-spin h-4 w-4' : 'h-4 w-4'} />
+                </Button>
+                <DropdownMenu onOpenChange={open => !open && setModelSearch('')}>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      disabled={models.length === 0}
+                      aria-label="设置可见模型"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="max-h-60 overflow-y-auto">
+                    <div
+                      className="border-b p-1"
+                      onKeyDown={event => event.stopPropagation()}
+                      onPointerDown={event => event.stopPropagation()}
+                    >
+                      <div className="relative">
+                        <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          value={modelSearch}
+                          onChange={event => setModelSearch(event.target.value)}
+                          placeholder="搜索模型"
+                          aria-label="搜索模型"
+                          className="h-7 border-0 pl-7 text-xs shadow-none focus-visible:ring-1"
+                        />
+                      </div>
+                    </div>
+                    {filteredModels.map(m => {
+                      const hidden = (draft.ai?.visibleModels || []).length > 0
+                        && !(draft.ai?.visibleModels || []).includes(m);
+                      return (
+                        <DropdownMenuItem
+                          key={m}
+                          onSelect={event => {
+                            event.preventDefault();
+                            toggleModelVisibility(m);
+                          }}
+                        >
+                          <Check className={hidden ? 'opacity-0 h-4 w-4' : 'h-4 w-4'} />
+                          <span className={hidden ? 'text-muted-foreground' : ''}>{m}</span>
+                        </DropdownMenuItem>
+                      );
+                    })}
+                    {filteredModels.length === 0 && (
+                      <div className="px-2 py-2 text-xs text-muted-foreground">未找到匹配的模型</div>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </SettingRow>
+            {modelError && (
+              <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                {modelError}
+              </div>
+            )}
           </TabsContent>
         </Tabs>
 

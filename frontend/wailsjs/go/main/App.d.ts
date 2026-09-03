@@ -8,21 +8,29 @@ export function CloneSSHLink(arg1:number):Promise<main.SavedNode>;
 
 export function Connect(arg1:string,arg2:main.ConnectionConfig,arg3:main.TerminalSize):Promise<string>;
 
-export function CreateFolder(arg1:number,arg2:string):Promise<main.SavedNode>;
+export function CreateFolder(arg1:number,arg2:string,arg3:string):Promise<main.SavedNode>;
 
 export function CreateSSHLink(arg1:number,arg2:main.SavedNode):Promise<main.SavedNode>;
+
+export function DeleteFolder(arg1:number):Promise<void>;
 
 export function DeleteSSHLink(arg1:number):Promise<void>;
 
 export function Disconnect(arg1:string):Promise<void>;
 
+export function FetchModels(arg1:string,arg2:string):Promise<Array<string>>;
+
 export function GetCredential(arg1:number):Promise<main.CredentialView>;
 
 export function ListConnectionNodes():Promise<Array<main.SavedNode>>;
 
+export function ListSftp(arg1:string,arg2:string):Promise<Array<main.SftpEntry>>;
+
 export function MoveNode(arg1:number,arg2:number):Promise<main.SavedNode>;
 
 export function PickPrivateKeyFile():Promise<string>;
+
+export function PickSavePath(arg1:string):Promise<string>;
 
 export function ResizeTerminal(arg1:string,arg2:main.TerminalSize):Promise<void>;
 
@@ -33,5 +41,25 @@ export function SetBackdropType(arg1:string):Promise<void>;
 export function SetCredential(arg1:number,arg2:main.SavedCredential):Promise<void>;
 
 export function SetGpuAcceleration(arg1:boolean):Promise<void>;
+
+export function SftpDownload(arg1:string,arg2:string,arg3:string):Promise<number>;
+
+export function SftpMkdir(arg1:string,arg2:string):Promise<void>;
+
+export function SftpRead(arg1:string,arg2:string):Promise<main.SftpFileInfo>;
+
+export function SftpRemove(arg1:string,arg2:string):Promise<void>;
+
+export function SftpRename(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function SftpStat(arg1:string,arg2:string):Promise<main.SftpEntry>;
+
+export function SftpWrite(arg1:string,arg2:string,arg3:Array<number>):Promise<void>;
+
+export function StartAIChat(arg1:string,arg2:string,arg3:string,arg4:string,arg5:Array<main.AIChatMessage>):Promise<void>;
+
+export function StopAIChat(arg1:string):Promise<void>;
+
+export function UpdateFolder(arg1:number,arg2:string,arg3:string):Promise<main.SavedNode>;
 
 export function UpdateSSHLink(arg1:number,arg2:number,arg3:main.SavedNode):Promise<main.SavedNode>;

@@ -15,6 +15,12 @@ const DEFAULT_SETTINGS = {
     scrollback: 5000,
     opacity: 100,
   },
+  ai: {
+    baseURL: '',
+    apiKey: '',
+    model: '',
+    visibleModels: [],
+  },
 };
 const DENSITIES = ['compact', 'default', 'comfortable'];
 const FONT_SIZES = [12, 13, 14, 15, 16];
@@ -27,6 +33,7 @@ function readSettings() {
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
     const terminal = stored.terminal || {};
+    const ai = stored.ai || {};
     return {
       density: DENSITIES.includes(stored.density) ? stored.density : DEFAULT_SETTINGS.density,
       gpuAcceleration: typeof stored.gpuAcceleration === 'boolean' ? stored.gpuAcceleration : DEFAULT_SETTINGS.gpuAcceleration,
@@ -43,6 +50,12 @@ function readSettings() {
           typeof terminal.opacity === 'number' && Number.isFinite(terminal.opacity)
             ? Math.min(MAX_OPACITY, Math.max(MIN_OPACITY, Math.round(terminal.opacity)))
             : DEFAULT_SETTINGS.terminal.opacity,
+      },
+      ai: {
+        baseURL: typeof ai.baseURL === 'string' ? ai.baseURL : DEFAULT_SETTINGS.ai.baseURL,
+        apiKey: typeof ai.apiKey === 'string' ? ai.apiKey : DEFAULT_SETTINGS.ai.apiKey,
+        model: typeof ai.model === 'string' ? ai.model : DEFAULT_SETTINGS.ai.model,
+        visibleModels: Array.isArray(ai.visibleModels) ? ai.visibleModels : DEFAULT_SETTINGS.ai.visibleModels,
       },
     };
   } catch (_) {

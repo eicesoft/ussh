@@ -14,6 +14,16 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Select,
   SelectTrigger,
   SelectValue,
@@ -56,11 +66,13 @@ export function SavedLinkDialog({
   folders,
   onClose,
   onSave,
+  onConnect,
   onPickFile,
 }) {
   const [form, setForm] = useState(blankForm);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [confirmingConnect, setConfirmingConnect] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -81,12 +93,13 @@ export function SavedLinkDialog({
     });
     setError('');
     setBusy(false);
+    setConfirmingConnect(false);
   }, [open, initial, credential]);
 
   const setField = (key, value) => setForm(prev => ({ ...prev, [key]: value }));
 
-  const validate = () => {
-    if (!form.name.trim()) return '请输入名称';
+  const validate = action => {
+    if (action === 'save' && !form.name.trim()) return '请输入名称';
     if (!form.host.trim()) return '请输入主机地址';
     if (!form.username.trim()) return '请输入用户名';
     const port = Number(form.port);
@@ -107,9 +120,10 @@ export function SavedLinkDialog({
     return '';
   };
 
-  const submit = async event => {
+  const submit = async (event, action = 'save') => {
     event?.preventDefault();
-    const message = validate();
+    if (busy) return;
+    const message = validate(action);
     if (message) {
       setError(message);
       return;
@@ -118,7 +132,7 @@ export function SavedLinkDialog({
     setBusy(true);
     const editMode = mode === 'edit';
     try {
-      await onSave({
+      const payload = {
         name: form.name.trim(),
         host: form.host.trim(),
         port: Number(form.port) || 22,
@@ -132,11 +146,36 @@ export function SavedLinkDialog({
           keyFile: slotValue(form.saveKeyFile, form.keyFile, credential?.hasKeyFile, editMode),
         },
         clearCredential: false,
-      });
+      };
+      if (action === 'connect') {
+        await onConnect?.({
+          ...payload,
+          credential: {
+            password: form.authType === 'password' ? form.password : '',
+            privateKey: form.authType === 'key' ? form.privateKey : '',
+            passphrase: form.passphrase,
+            keyFile: form.authType === 'keyfile' ? form.keyFile : '',
+          },
+        });
+      } else {
+        await onSave(payload);
+      }
     } catch (e) {
       setError(String(e));
       setBusy(false);
     }
+  };
+
+  const requestConnect = event => {
+    event?.preventDefault();
+    if (busy) return;
+    const message = validate('connect');
+    if (message) {
+      setError(message);
+      return;
+    }
+    setError('');
+    setConfirmingConnect(true);
   };
 
   const handlePickFile = async () => {
@@ -409,12 +448,31 @@ export function SavedLinkDialog({
             <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
               取消
             </Button>
+            {mode === 'create' && (
+              <Button type="button" variant="outline" onClick={requestConnect} disabled={busy}>
+                连接
+              </Button>
+            )}
             <Button type="submit" disabled={busy}>
-              {mode === 'edit' ? '保存修改' : '新增连接'}
+              {mode === 'edit' ? '保存修改' : '保存'}
             </Button>
           </DialogFooter>
         </form>
       </DialogContent>
+      <AlertDialog open={confirmingConnect} onOpenChange={setConfirmingConnect}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认直接连接？</AlertDialogTitle>
+            <AlertDialogDescription>
+              直接连接不会保存当前连接信息，关闭标签或应用后需要重新输入。确定继续吗？
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={() => submit(undefined, 'connect')}>连接</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

@@ -14,12 +14,16 @@ export function Connect(arg1, arg2, arg3) {
   return window['go']['main']['App']['Connect'](arg1, arg2, arg3);
 }
 
-export function CreateFolder(arg1, arg2) {
-  return window['go']['main']['App']['CreateFolder'](arg1, arg2);
+export function CreateFolder(arg1, arg2, arg3) {
+  return window['go']['main']['App']['CreateFolder'](arg1, arg2, arg3);
 }
 
 export function CreateSSHLink(arg1, arg2) {
   return window['go']['main']['App']['CreateSSHLink'](arg1, arg2);
+}
+
+export function DeleteFolder(arg1) {
+  return window['go']['main']['App']['DeleteFolder'](arg1);
 }
 
 export function DeleteSSHLink(arg1) {
@@ -30,6 +34,10 @@ export function Disconnect(arg1) {
   return window['go']['main']['App']['Disconnect'](arg1);
 }
 
+export function FetchModels(arg1, arg2) {
+  return window['go']['main']['App']['FetchModels'](arg1, arg2);
+}
+
 export function GetCredential(arg1) {
   return window['go']['main']['App']['GetCredential'](arg1);
 }
@@ -38,12 +46,20 @@ export function ListConnectionNodes() {
   return window['go']['main']['App']['ListConnectionNodes']();
 }
 
+export function ListSftp(arg1, arg2) {
+  return window['go']['main']['App']['ListSftp'](arg1, arg2);
+}
+
 export function MoveNode(arg1, arg2) {
   return window['go']['main']['App']['MoveNode'](arg1, arg2);
 }
 
 export function PickPrivateKeyFile() {
   return window['go']['main']['App']['PickPrivateKeyFile']();
+}
+
+export function PickSavePath(arg1) {
+  return window['go']['main']['App']['PickSavePath'](arg1);
 }
 
 export function ResizeTerminal(arg1, arg2) {
@@ -64,6 +80,46 @@ export function SetCredential(arg1, arg2) {
 
 export function SetGpuAcceleration(arg1) {
   return window['go']['main']['App']['SetGpuAcceleration'](arg1);
+}
+
+export function SftpDownload(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SftpDownload'](arg1, arg2, arg3);
+}
+
+export function SftpMkdir(arg1, arg2) {
+  return window['go']['main']['App']['SftpMkdir'](arg1, arg2);
+}
+
+export function SftpRead(arg1, arg2) {
+  return window['go']['main']['App']['SftpRead'](arg1, arg2);
+}
+
+export function SftpRemove(arg1, arg2) {
+  return window['go']['main']['App']['SftpRemove'](arg1, arg2);
+}
+
+export function SftpRename(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SftpRename'](arg1, arg2, arg3);
+}
+
+export function SftpStat(arg1, arg2) {
+  return window['go']['main']['App']['SftpStat'](arg1, arg2);
+}
+
+export function SftpWrite(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SftpWrite'](arg1, arg2, arg3);
+}
+
+export function StartAIChat(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['StartAIChat'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function StopAIChat(arg1) {
+  return window['go']['main']['App']['StopAIChat'](arg1);
+}
+
+export function UpdateFolder(arg1, arg2, arg3) {
+  return window['go']['main']['App']['UpdateFolder'](arg1, arg2, arg3);
 }
 
 export function UpdateSSHLink(arg1, arg2, arg3) {

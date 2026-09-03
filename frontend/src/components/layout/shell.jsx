@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
 import { Quit, WindowIsMaximised, WindowMinimise, WindowToggleMaximise } from '../../../wailsjs/runtime/runtime';
 import { Minus, PanelLeftClose, PanelLeftOpen, Plus, Settings, X } from 'lucide-react';
@@ -13,15 +13,19 @@ import { SavedLinkDialog } from '@/components/connection/saved-link-dialog';
 import { NewFolderDialog } from '@/components/connection/new-folder-dialog';
 import { ConfirmDeleteDialog } from '@/components/connection/confirm-delete-dialog';
 import { SettingsDialog } from '@/components/settings/settings-dialog';
+import { AboutDialog } from '@/components/about-dialog';
 import { ConnectionDashboard } from '@/components/dashboard/connection-dashboard';
 import { useTabs } from '@/hooks/use-tabs';
 import { useSavedNodes } from '@/hooks/use-saved-nodes';
 import { useTerminalEvents } from '@/hooks/use-terminal-event';
 import { useSettings } from '@/hooks/use-settings';
-import { api } from '@/lib/api';
+import { api, onShowAbout, onShowSettings, runtimeAvailable } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { DEFAULT_FOLDER_COLOR, normalizeFolderColor } from '@/lib/folder-colors';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import '@/plugins';
+import { PluginContext } from '@/plugins/context';
 
 export function Shell() {
   const {
@@ -36,13 +40,14 @@ export function Shell() {
     updateTab,
     toggleTabPinned,
     registerTerm,
-    buffersRef,
     termsRef,
   } = useTabs();
 
   const {
     nodes,
     createFolder,
+    updateFolder,
+    deleteFolder,
     createSSHLink,
     moveNode,
     updateSSHLink,
@@ -55,8 +60,11 @@ export function Shell() {
   const { settings, applySettings } = useSettings();
   const [globalStatus, setGlobalStatus] = useState('准备就绪');
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [showAboutDialog, setShowAboutDialog] = useState(false);
   const [showSavedLinkDialog, setShowSavedLinkDialog] = useState(false);
   const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
+  const [editingFolder, setEditingFolder] = useState(null);
+  const [newLinkParentId, setNewLinkParentId] = useState(0);
   const [editingNode, setEditingNode] = useState(null);
   const [editingCredential, setEditingCredential] = useState(null);
   const [deletingNode, setDeletingNode] = useState(null);
@@ -78,6 +86,28 @@ export function Shell() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!runtimeAvailable) return undefined;
+    const offAbout = onShowAbout(() => setShowAboutDialog(true));
+    const offSettings = onShowSettings(() => setShowSettingsDialog(true));
+    return () => {
+      offAbout?.();
+      offSettings?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    const savedLinks = new Map(nodes.filter(node => node.type === 'ssh').map(node => [node.id, node]));
+    const folders = new Map(nodes.filter(node => node.type === 'folder').map(node => [node.id, node]));
+    tabs.forEach(tab => {
+      if (tab.kind === 'dashboard' || !tab.sourceNodeId) return;
+      const node = savedLinks.get(tab.sourceNodeId);
+      const folder = node ? folders.get(node.parentId) : undefined;
+      const color = folder ? normalizeFolderColor(folder.color) : undefined;
+      if (tab.color !== color) updateTab(tab.id, { color });
+    });
+  }, [nodes, tabs, updateTab]);
+
   useTerminalEvents({
     onOutput: (tabId, data) => writeToTab(tabId, data),
     onStatus: payload => {
@@ -92,14 +122,37 @@ export function Shell() {
   });
 
   const handleAddFolder = useCallback(() => {
+    setEditingFolder(null);
     setShowNewFolderDialog(true);
   }, []);
 
-  const submitNewFolder = useCallback(
-    async name => {
-      await createFolder(name);
+  const handleAddLink = useCallback(parentId => {
+    setNewLinkParentId(Number(parentId) || 0);
+    setShowSavedLinkDialog(true);
+  }, []);
+
+  const openNewConnection = useCallback(() => {
+    handleAddLink(0);
+  }, [handleAddLink]);
+
+  const handleEditFolder = useCallback(folder => {
+    setEditingFolder(folder);
+  }, []);
+
+  const closeFolderDialog = useCallback(() => {
+    setShowNewFolderDialog(false);
+    setEditingFolder(null);
+  }, []);
+
+  const submitFolder = useCallback(
+    async (name, color) => {
+      if (editingFolder) {
+        await updateFolder(editingFolder.id, name, color);
+      } else {
+        await createFolder(name, color);
+      }
     },
-    [createFolder],
+    [createFolder, editingFolder, updateFolder],
   );
 
   const handleMoveNode = useCallback(
@@ -147,18 +200,25 @@ export function Shell() {
     const target = deletingNode;
     setDeletingNode(null);
     try {
-      await deleteSSHLink(target.id);
+      if (target.type === 'folder') {
+        await deleteFolder(target.id);
+      } else {
+        await deleteSSHLink(target.id);
+      }
       setGlobalStatus(`已删除「${target.name}」`);
     } catch (e) {
       setGlobalStatus(`删除失败：${e}`);
     }
-  }, [deletingNode, deleteSSHLink]);
+  }, [deletingNode, deleteFolder, deleteSSHLink]);
 
   const closeSavedDialog = useCallback(() => {
     setShowSavedLinkDialog(false);
     setEditingNode(null);
     setEditingCredential(null);
+    setNewLinkParentId(0);
   }, []);
+
+  const createLinkInitial = useMemo(() => ({ parentId: newLinkParentId }), [newLinkParentId]);
 
   const submitSavedLink = useCallback(
     async payload => {
@@ -200,16 +260,16 @@ export function Shell() {
 
   const handleConnect = useCallback(
     async (tabId, payload) => {
-      buffersRef.current[tabId] = '';
+      const reconnecting = Boolean(termsRef.current[tabId]);
       setTabStatus(tabId, 'connecting');
       updateTab(tabId, {
         host: payload.host,
         port: payload.port,
         username: payload.username,
         authType: payload.authType,
+        form: payload,
       });
       const term = termsRef.current[tabId];
-      if (term) term.reset();
       const size = term
         ? { columns: term.cols, rows: term.rows }
         : { columns: 100, rows: 30 };
@@ -222,15 +282,17 @@ export function Shell() {
         }));
       } catch (e) {
         setGlobalStatus(`连接失败：${e}`);
-        setTabStatus(tabId, 'idle');
+        setTabStatus(tabId, reconnecting ? 'closed' : 'idle');
       }
     },
-    [setTabStatus, updateTab, buffersRef, termsRef],
+    [setTabStatus, updateTab, termsRef],
   );
 
   const connectSavedLink = useCallback(
     node => {
       const id = newTab();
+      const folder = nodes.find(item => item.type === 'folder' && item.id === node.parentId);
+      const color = folder ? normalizeFolderColor(folder.color) : undefined;
       const form = {
         host: node.host,
         port: node.port,
@@ -242,10 +304,33 @@ export function Shell() {
         authType: node.authType || 'password',
         savedNodeId: node.id,
       };
-      updateTab(id, { label: node.name, name: node.name, sourceNodeId: node.id, form });
+      updateTab(id, { label: node.name, name: node.name, sourceNodeId: node.id, color, form });
       handleConnect(id, form);
     },
-    [newTab, updateTab, handleConnect],
+    [newTab, updateTab, handleConnect, nodes],
+  );
+
+  const connectTemporary = useCallback(
+    async payload => {
+      const id = newTab();
+      const credential = payload.credential || {};
+      const form = {
+        host: payload.host,
+        port: payload.port,
+        username: payload.username,
+        password: credential.password || '',
+        privateKey: credential.privateKey || '',
+        passphrase: credential.passphrase || '',
+        keyFile: credential.keyFile || '',
+        authType: payload.authType || 'password',
+        savedNodeId: 0,
+      };
+      const label = payload.name || `${payload.username || 'user'}@${payload.host}`;
+      updateTab(id, { label, name: payload.name, form });
+      closeSavedDialog();
+      await handleConnect(id, form);
+    },
+    [newTab, updateTab, closeSavedDialog, handleConnect],
   );
 
   const handleSend = useCallback(async (tabId, data) => {
@@ -295,11 +380,11 @@ export function Shell() {
       await api.disconnect(tab.id);
     } catch (_) {
     } finally {
-      buffersRef.current[tab.id] = '';
-      setTabStatus(tab.id, 'idle');
+      writeToTab(tab.id, '\r\n用户断开连接\r\n');
+      setTabStatus(tab.id, 'closed');
       setGlobalStatus('已断开连接');
     }
-  }, [setTabStatus, buffersRef]);
+  }, [setTabStatus, writeToTab]);
 
   const onActiveConnect = useCallback(
     payload => handleConnect(activeTab.id, payload),
@@ -313,6 +398,13 @@ export function Shell() {
     size => handleResize(activeTab.id, size),
     [activeTab.id, handleResize],
   );
+  const onActiveReconnect = useCallback(
+    () => {
+      if (activeTab.status !== 'closed' || !activeTab.form) return;
+      handleConnect(activeTab.id, activeTab.form);
+    },
+    [activeTab.id, activeTab.status, activeTab.form, handleConnect],
+  );
   const onActiveTermReady = useCallback(
     (term, tabId) => {
       registerTerm(tabId ?? activeTab.id, term);
@@ -322,29 +414,38 @@ export function Shell() {
 
   const terminalActive =
     activeTab.kind !== 'dashboard' &&
-    (activeTab.status === 'connected' || activeTab.status === 'connecting');
+    (activeTab.status === 'connected' || activeTab.status === 'connecting' || activeTab.status === 'closed');
   const terminalOpacity = (settings.terminal?.opacity ?? 100) / 100;
   const activeConnectionCount = tabs.filter(
     tab => tab.kind !== 'dashboard' && (tab.status === 'connected' || tab.status === 'connecting'),
   ).length;
+
+  const pluginContext = useMemo(() => ({
+    activeTab,
+    tabs,
+    sendInput: handleSend,
+    disconnect: disconnectTab,
+    api,
+    settings,
+  }), [activeTab, tabs, handleSend, disconnectTab, settings]);
 
   return (
     <main
       className={cn(
         'app-window flex h-screen flex-col overflow-hidden bg-background text-foreground',
         isWindowMaximised ? 'rounded-none' : 'rounded-[14px]',
-        // 终端半透明时让桌面从终端区域透出，其余区域各有自己的底色。
-        terminalActive && terminalOpacity < 1 && 'bg-transparent',
+        // 启用窗口材质时保持主容器透明，让总览和其他标签下的界面区域都能透出亚克力背景。
+        settings.backdropType !== 'none' && 'bg-transparent',
       )}
       data-density={settings.density}
     >
       <header
-        className="app-drag flex min-w-0 select-none bg-transparent"
+        className="app-drag acrylic-panel flex min-w-0 select-none"
         style={{ height: 'var(--density-tab-height)' }}
       >
         <TooltipProvider delayDuration={300}>
           <div
-            className="flex shrink-0 items-center gap-3 bg-[#f7f7f8]/90 px-3 transition-[width] duration-200 ease-out dark:bg-secondary/90"
+            className="flex shrink-0 items-center gap-3 bg-transparent px-3 transition-[width] duration-200 ease-out"
             style={{ width: isConnectionTreeVisible ? connectionTreeWidth + 1 : 200 }}
           >
             <div className="app-no-drag group/window-controls flex items-center gap-2" aria-label="窗口控制">
@@ -394,7 +495,7 @@ export function Shell() {
             onClose={closeTab}
             onDisconnect={disconnectTab}
             onTogglePinned={toggleTabPinned}
-            onNew={newTab}
+            onNewConnection={openNewConnection}
           />
         </div>
       </header>
@@ -417,16 +518,18 @@ export function Shell() {
             onSelect={selectTab}
             onOpenSaved={connectSavedLink}
             onAddFolder={handleAddFolder}
-            onAddLink={() => setShowSavedLinkDialog(true)}
+            onAddLink={handleAddLink}
             onMoveNode={handleMoveNode}
             onEditSaved={handleEditSaved}
             onCloneSaved={handleCloneSaved}
             onDeleteSaved={handleDeleteSaved}
+            onEditFolder={handleEditFolder}
+            onDeleteFolder={handleDeleteSaved}
           />
         </Panel>
         <Separator
           className={cn(
-            'cursor-col-resize bg-transparent transition-[width,opacity,background-color,box-shadow] duration-200 hover:bg-primary/80 hover:shadow-[0_0_8px_hsl(var(--primary)/0.4)] data-[separator=dragging]:bg-primary data-[separator=dragging]:shadow-[0_0_10px_hsl(var(--primary)/0.55)]',
+            'split-resizer',
             isConnectionTreeVisible ? 'w-px' : 'pointer-events-none w-0 opacity-0',
           )}
         />
@@ -447,7 +550,11 @@ export function Shell() {
                   }
                 >
                   {activeTab.kind === 'dashboard' ? (
-                    <ConnectionDashboard nodes={nodes} onConnect={connectSavedLink} onNew={newTab} />
+                    <ConnectionDashboard
+                      nodes={nodes}
+                      onConnect={connectSavedLink}
+                      onNewConnection={openNewConnection}
+                    />
                   ) : terminalActive ? (
                     <>
                       <TerminalView
@@ -457,6 +564,7 @@ export function Shell() {
                         onResize={onActiveResize}
                         onFocus={() => {}}
                         onTermReady={onActiveTermReady}
+                        onReconnect={onActiveReconnect}
                         terminalSettings={settings.terminal}
                       />
                       <TerminalActions active={activeUtility} onToggle={setActiveUtility} />
@@ -472,14 +580,16 @@ export function Shell() {
               </Panel>
               {terminalActive && activeUtility && (
                 <>
-                  <Separator className="w-px cursor-col-resize bg-transparent transition-[background-color,box-shadow] duration-150 hover:bg-primary/80 hover:shadow-[0_0_8px_hsl(var(--primary)/0.4)] data-[separator=dragging]:bg-primary data-[separator=dragging]:shadow-[0_0_10px_hsl(var(--primary)/0.55)]" />
+                  <Separator className="split-resizer" />
                   <Panel
-                    defaultSize={240}
-                    minSize={180}
-                    maxSize={360}
+                    defaultSize={360}
+                    minSize={200}
+                    maxSize={680}
                     groupResizeBehavior="preserve-pixel-size"
                   >
-                    <UtilityPanel active={activeUtility} onToggle={setActiveUtility} />
+                    <PluginContext.Provider value={pluginContext}>
+                      <UtilityPanel active={activeUtility} onToggle={setActiveUtility} />
+                    </PluginContext.Provider>
                   </Panel>
                 </>
               )}
@@ -501,21 +611,30 @@ export function Shell() {
         onSave={applySettings}
       />
 
+      <AboutDialog
+        open={showAboutDialog}
+        onClose={() => setShowAboutDialog(false)}
+      />
+
       <SavedLinkDialog
         open={showSavedLinkDialog || editingNode !== null}
         mode={editingNode ? 'edit' : 'create'}
-        initial={editingNode || undefined}
+        initial={editingNode || createLinkInitial}
         credential={editingCredential || undefined}
         folders={nodes.filter(node => node.type === 'folder')}
         onClose={closeSavedDialog}
         onSave={submitSavedLink}
+        onConnect={connectTemporary}
         onPickFile={pickPrivateKeyFile}
       />
 
       <NewFolderDialog
-        open={showNewFolderDialog}
-        onClose={() => setShowNewFolderDialog(false)}
-        onCreate={submitNewFolder}
+        open={showNewFolderDialog || editingFolder !== null}
+        mode={editingFolder ? 'edit' : 'create'}
+        initialName={editingFolder?.name}
+        initialColor={normalizeFolderColor(editingFolder?.color || DEFAULT_FOLDER_COLOR)}
+        onClose={closeFolderDialog}
+        onCreate={submitFolder}
       />
 
       <ConfirmDeleteDialog

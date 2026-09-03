@@ -41,6 +41,7 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
+		Menu: buildApplicationMenu(app),
 		// 让前端的圆角外侧透出桌面背景，而不是由原生窗口填充颜色。
 		BackgroundColour: &options.RGBA{R: 0, G: 0, B: 0, A: 0},
 		Mac: &mac.Options{

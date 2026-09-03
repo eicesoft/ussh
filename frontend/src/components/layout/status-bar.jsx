@@ -27,7 +27,10 @@ export function StatusBar({ activeTab, activeConnectionCount, globalStatus }) {
     : globalStatus;
 
   return (
-    <footer className="flex h-8 select-none items-center gap-2 bg-muted px-3 text-xs text-muted-foreground">
+    <footer
+      className="acrylic-panel flex h-8 select-none items-center gap-2 px-3 text-xs text-muted-foreground"
+      onContextMenu={event => event.preventDefault()}
+    >
       <span
         className={cn(
           'h-1.5 w-1.5 shrink-0 rounded-full',

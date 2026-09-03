@@ -23,6 +23,9 @@
     --border: 215 22% 87%;
     --input: 215 22% 87%;
     --ring: 158 72% 35%;
+    --splitter: 215 22% 87%;
+    --splitter-hover: 158 72% 35%;
+    --splitter-active: 158 72% 30%;
     --radius: 0.5rem;
     --density-tab-height: 30px;
     --density-tab-padding-x: 8px;
@@ -79,6 +82,65 @@
     --border: 222 20% 22%;
     --input: 222 20% 22%;
     --ring: 158 64% 42%;
+    --splitter: 222 20% 30%;
+    --splitter-hover: 158 64% 55%;
+    --splitter-active: 158 64% 62%;
+  }
+}
+
+@layer components {
+  /* 顶部与左右工具面板共享的亚克力材质：约 70% 透出窗口背景。 */
+  .acrylic-panel {
+    --acrylic-opacity: 0.3;
+    color: hsl(var(--foreground));
+    background: hsl(var(--background) / var(--acrylic-opacity));
+    -webkit-backdrop-filter: blur(24px) saturate(120%);
+    backdrop-filter: blur(24px) saturate(120%);
+  }
+
+  .split-resizer {
+    position: relative;
+    isolation: isolate;
+    /* 相邻面板（.terminal-panel）带 transform，会进入同一绘制层且在其之后绘制，
+       故显式抬高层级，保证悬停光带不被覆盖。 */
+    z-index: 1;
+    width: 1px;
+    cursor: col-resize;
+    background-color: hsl(var(--splitter));
+    transition: background-color 150ms ease;
+  }
+
+  /* 保持分隔线纤细，同时扩大可拖拽的鼠标命中区域。 */
+  .split-resizer::before {
+    position: absolute;
+    inset: 0 -3px;
+    content: '';
+    cursor: col-resize;
+  }
+
+  /* 悬停/拖拽的高亮层：与主线同宽（1px），只靠外发光表现，避免线变粗。 */
+  .split-resizer::after {
+    position: absolute;
+    inset: 0;
+    content: '';
+    pointer-events: none;
+    background-color: transparent;
+    transition: background-color 150ms ease, box-shadow 150ms ease;
+  }
+
+  /* data-separator 由库写入，取值为 inactive / hover / active / focus。
+     注意不要用 [data-separator='focus']：鼠标拖拽结束后焦点仍留在分隔条上，
+     会导致高亮一直不消失；:focus-visible 只在键盘导航时命中。 */
+  .split-resizer:hover::after,
+  .split-resizer[data-separator='hover']::after,
+  .split-resizer:focus-visible::after {
+    background-color: hsl(var(--splitter-hover));
+    box-shadow: 0 0 3px hsl(var(--splitter-hover) / 0.7);
+  }
+
+  .split-resizer[data-separator='active']::after {
+    background-color: hsl(var(--splitter-active));
+    box-shadow: 0 0 3px hsl(var(--splitter-active) / 0.9);
   }
 }
 

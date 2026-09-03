@@ -14,8 +14,25 @@ export function useSavedNodes() {
   }, [reload]);
 
   const createFolder = useCallback(
-    async name => {
-      await api.createFolder(0, name);
+    async (name, color) => {
+      await api.createFolder(0, name, color);
+      await reload();
+    },
+    [reload],
+  );
+
+  const updateFolder = useCallback(
+    async (id, name, color) => {
+      const updated = await api.updateFolder(id, name, color);
+      await reload();
+      return updated;
+    },
+    [reload],
+  );
+
+  const deleteFolder = useCallback(
+    async id => {
+      await api.deleteFolder(id);
       await reload();
     },
     [reload],
@@ -68,6 +85,8 @@ export function useSavedNodes() {
     nodes,
     reload,
     createFolder,
+    updateFolder,
+    deleteFolder,
     createSSHLink,
     moveNode,
     updateSSHLink,

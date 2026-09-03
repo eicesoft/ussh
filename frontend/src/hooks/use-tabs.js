@@ -42,7 +42,7 @@ export function useTabs() {
 
   const newTab = useCallback(() => {
     const id = newTabId();
-    const tab = { id, kind: 'connection', label: '新会话', status: 'idle', buffer: '', closable: true, form: blankForm };
+    const tab = { id, kind: 'connection', label: '连接', status: 'idle', buffer: '', closable: true, form: blankForm };
     setTabs(prev => [...prev, tab]);
     setActiveId(id);
     return id;

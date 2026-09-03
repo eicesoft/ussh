@@ -18,6 +18,8 @@ export function DeleteSSHLink(arg1:number):Promise<void>;
 
 export function Disconnect(arg1:string):Promise<void>;
 
+export function ExecRemoteCommand(arg1:string,arg2:string,arg3:number):Promise<main.RemoteCommandResult>;
+
 export function FetchModels(arg1:string,arg2:string):Promise<Array<string>>;
 
 export function GetCredential(arg1:number):Promise<main.CredentialView>;

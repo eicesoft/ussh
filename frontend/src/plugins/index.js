@@ -2,3 +2,4 @@
 import './builtin/quick-commands';
 import './builtin/file-transfer';
 import './builtin/ai-agent';
+import './builtin/docker';

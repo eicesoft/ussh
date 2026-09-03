@@ -211,6 +211,24 @@ export namespace main {
 	        this.hasKeyFile = source["hasKeyFile"];
 	    }
 	}
+	export class RemoteCommandResult {
+	    output: string;
+	    exitCode: number;
+	    timedOut: boolean;
+	    durationMs: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new RemoteCommandResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.output = source["output"];
+	        this.exitCode = source["exitCode"];
+	        this.timedOut = source["timedOut"];
+	        this.durationMs = source["durationMs"];
+	    }
+	}
 	export class SavedCredential {
 	    password?: string;
 	    privateKey?: string;
@@ -325,11 +343,11 @@ export namespace main {
 	    shell: string;
 	    cwd: string;
 	    uptime: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new SystemInfo(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.host = source["host"];
@@ -360,3 +378,4 @@ export namespace main {
 	}
 
 }
+

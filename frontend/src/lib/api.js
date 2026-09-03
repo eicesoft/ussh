@@ -21,6 +21,11 @@ export const api = {
     if (!app?.GetSystemInfo) throw new Error('服务器信息服务不可用，请在 uSSH 应用中运行。');
     return app.GetSystemInfo(tabId);
   },
+  async execRemoteCommand(tabId, command, timeoutSeconds = 30) {
+    const app = appApi();
+    if (!app?.ExecRemoteCommand) throw new Error('远程命令服务不可用，请在 uSSH 应用中运行。');
+    return app.ExecRemoteCommand(tabId, command, timeoutSeconds);
+  },
   async listConnectionNodes() {
     return appApi()?.ListConnectionNodes();
   },

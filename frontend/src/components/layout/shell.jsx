@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
 import { Quit, WindowIsMaximised, WindowMinimise, WindowToggleMaximise } from '../../../wailsjs/runtime/runtime';
-import { Minus, PanelLeftClose, PanelLeftOpen, Plus, Settings, X } from 'lucide-react';
+import { Maximize2, Minus, PanelLeftClose, PanelLeftOpen, Settings, X } from 'lucide-react';
 import { ConnectionTree } from './connection-tree';
 import { TabBar } from './tab-bar';
 import { UtilityPanel } from './utility-panel';
@@ -11,6 +11,7 @@ import { TerminalView } from '@/components/connection/terminal-view';
 import { TerminalActions } from '@/components/connection/terminal-actions';
 import { SavedLinkDialog } from '@/components/connection/saved-link-dialog';
 import { NewFolderDialog } from '@/components/connection/new-folder-dialog';
+import { NewWorkspaceDialog } from './new-workspace-dialog';
 import { ConfirmDeleteDialog } from '@/components/connection/confirm-delete-dialog';
 import { SettingsDialog } from '@/components/settings/settings-dialog';
 import { AboutDialog } from '@/components/about-dialog';
@@ -28,11 +29,17 @@ import '@/plugins';
 import { PluginContext } from '@/plugins/context';
 
 export function Shell() {
+  const { settings, applySettings } = useSettings();
   const {
     tabs,
+    workspaceTabs,
+    workspaces,
+    activeWorkspaceId,
     activeId,
     activeTab,
     selectTab,
+    switchWorkspace,
+    createWorkspace,
     newTab,
     closeTab,
     setTabStatus,
@@ -41,10 +48,11 @@ export function Shell() {
     toggleTabPinned,
     registerTerm,
     termsRef,
-  } = useTabs();
+  } = useTabs({ restoreTabs: settings.restoreTabs });
 
   const {
     nodes,
+    loaded: savedNodesLoaded,
     createFolder,
     updateFolder,
     deleteFolder,
@@ -56,13 +64,15 @@ export function Shell() {
     getCredential,
     setCredential,
     pickPrivateKeyFile,
+    reorderNodes,
   } = useSavedNodes();
-  const { settings, applySettings } = useSettings();
   const [globalStatus, setGlobalStatus] = useState('准备就绪');
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [showAboutDialog, setShowAboutDialog] = useState(false);
   const [showSavedLinkDialog, setShowSavedLinkDialog] = useState(false);
   const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
+  const [showNewWorkspaceDialog, setShowNewWorkspaceDialog] = useState(false);
+  const [newFolderParentId, setNewFolderParentId] = useState(0);
   const [editingFolder, setEditingFolder] = useState(null);
   const [newLinkParentId, setNewLinkParentId] = useState(0);
   const [editingNode, setEditingNode] = useState(null);
@@ -74,6 +84,7 @@ export function Shell() {
   const [isConnectionTreeVisible, setIsConnectionTreeVisible] = useState(true);
   const connectionTreePanelRef = usePanelRef();
   const settingsButtonRef = useRef(null);
+  const systemInfoRequestsRef = useRef(new Set());
 
   useEffect(() => {
     if (!window.runtime) return undefined;
@@ -121,8 +132,9 @@ export function Shell() {
     },
   });
 
-  const handleAddFolder = useCallback(() => {
+  const handleAddFolder = useCallback(parentId => {
     setEditingFolder(null);
+    setNewFolderParentId(Number(parentId) || 0);
     setShowNewFolderDialog(true);
   }, []);
 
@@ -135,6 +147,10 @@ export function Shell() {
     handleAddLink(0);
   }, [handleAddLink]);
 
+  const handleCreateWorkspace = useCallback(name => {
+    createWorkspace(name);
+  }, [createWorkspace]);
+
   const handleEditFolder = useCallback(folder => {
     setEditingFolder(folder);
   }, []);
@@ -142,6 +158,7 @@ export function Shell() {
   const closeFolderDialog = useCallback(() => {
     setShowNewFolderDialog(false);
     setEditingFolder(null);
+    setNewFolderParentId(0);
   }, []);
 
   const submitFolder = useCallback(
@@ -149,10 +166,10 @@ export function Shell() {
       if (editingFolder) {
         await updateFolder(editingFolder.id, name, color);
       } else {
-        await createFolder(name, color);
+        await createFolder(newFolderParentId, name, color);
       }
     },
-    [createFolder, editingFolder, updateFolder],
+    [createFolder, editingFolder, newFolderParentId, updateFolder],
   );
 
   const handleMoveNode = useCallback(
@@ -164,6 +181,17 @@ export function Shell() {
       }
     },
     [moveNode],
+  );
+
+  const handleReorderNodes = useCallback(
+    async (parentId, orderedIds) => {
+      try {
+        await reorderNodes(parentId, orderedIds);
+      } catch (e) {
+        setGlobalStatus(`排序失败：${e}`);
+      }
+    },
+    [reorderNodes],
   );
 
   const handleEditSaved = useCallback(
@@ -258,6 +286,20 @@ export function Shell() {
     [editingNode, createSSHLink, updateSSHLink, setCredential, closeSavedDialog],
   );
 
+  const refreshSystemInfo = useCallback(async tabId => {
+    if (!tabId || systemInfoRequestsRef.current.has(tabId)) return;
+    systemInfoRequestsRef.current.add(tabId);
+    updateTab(tabId, tab => ({ systemInfoStatus: tab.systemInfo ? 'refreshing' : 'loading' }));
+    try {
+      const systemInfo = await api.getSystemInfo(tabId);
+      updateTab(tabId, { systemInfo, systemInfoStatus: 'ready' });
+    } catch (_) {
+      updateTab(tabId, { systemInfoStatus: 'error' });
+    } finally {
+      systemInfoRequestsRef.current.delete(tabId);
+    }
+  }, [updateTab]);
+
   const handleConnect = useCallback(
     async (tabId, payload) => {
       const reconnecting = Boolean(termsRef.current[tabId]);
@@ -282,21 +324,14 @@ export function Shell() {
         updateTab(tabId, tab => ({
           label: tab.name || `${payload.username || 'user'}@${payload.host}`,
         }));
-        // 连接成功后在独立 SSH session 中读取系统信息，既不污染用户终端，
-        // 也让 AI 面板可以展示并把同一份上下文传给智能体。
-        try {
-          const systemInfo = await api.getSystemInfo(tabId);
-          updateTab(tabId, { systemInfo, systemInfoStatus: 'ready' });
-        } catch (_) {
-          // 基础连接已经成功；系统信息探测失败不应影响终端使用。
-          updateTab(tabId, { systemInfoStatus: 'error' });
-        }
+        // 连接成功后异步读取系统信息，既不阻塞终端连接，也不污染用户终端输出。
+        void refreshSystemInfo(tabId);
       } catch (e) {
         setGlobalStatus(`连接失败：${e}`);
         setTabStatus(tabId, reconnecting ? 'closed' : 'idle');
       }
     },
-    [setTabStatus, updateTab, termsRef],
+    [refreshSystemInfo, setTabStatus, updateTab, termsRef],
   );
 
   const connectSavedLink = useCallback(
@@ -320,6 +355,59 @@ export function Shell() {
     },
     [newTab, updateTab, handleConnect, nodes],
   );
+
+  const cloneTab = useCallback(
+    tab => {
+      if (!tab || tab.kind === 'dashboard' || !tab.form) return;
+      const id = newTab();
+      const form = { ...tab.form };
+      updateTab(id, {
+        label: tab.label,
+        name: tab.name,
+        host: tab.host,
+        port: tab.port,
+        username: tab.username,
+        authType: tab.authType,
+        sourceNodeId: tab.sourceNodeId || 0,
+        color: tab.color,
+        form,
+      });
+      handleConnect(id, form);
+    },
+    [handleConnect, newTab, updateTab],
+  );
+
+  const restoredTabsRef = useRef(false);
+  useEffect(() => {
+    if (!settings.restoreTabs || !savedNodesLoaded || restoredTabsRef.current) return;
+    restoredTabsRef.current = true;
+    tabs.filter(tab => tab.restorePending).forEach(tab => {
+      const node = nodes.find(item => item.type === 'ssh' && item.id === tab.sourceNodeId);
+      if (!node) {
+        closeTab(tab.id);
+        return;
+      }
+      const form = {
+        host: node.host,
+        port: node.port,
+        username: node.username,
+        password: '',
+        privateKey: '',
+        passphrase: '',
+        keyFile: '',
+        authType: node.authType || 'password',
+        savedNodeId: node.id,
+      };
+      updateTab(tab.id, {
+        label: node.name,
+        name: node.name,
+        sourceNodeId: node.id,
+        restorePending: false,
+        form,
+      });
+      handleConnect(tab.id, form);
+    });
+  }, [closeTab, handleConnect, nodes, savedNodesLoaded, settings.restoreTabs, tabs, updateTab]);
 
   const connectTemporary = useCallback(
     async payload => {
@@ -457,19 +545,27 @@ export function Shell() {
       <header
         className="app-drag acrylic-panel flex min-w-0 select-none"
         style={{ height: 'var(--density-tab-height)' }}
+        onDoubleClick={toggleMaximiseWindow}
       >
         <TooltipProvider delayDuration={300}>
           <div
             className="flex shrink-0 items-center gap-3 bg-transparent px-3 transition-[width] duration-200 ease-out"
             style={{ width: isConnectionTreeVisible ? connectionTreeWidth + 1 : 200 }}
           >
-            <div className="app-no-drag group/window-controls flex items-center gap-2" aria-label="窗口控制">
+            <div
+              className="app-no-drag group/window-controls flex items-center gap-2"
+              aria-label="窗口控制"
+              onDoubleClick={event => event.stopPropagation()}
+            >
               <WindowControl label="关闭窗口" className="bg-[#ff5f57]" onClick={closeWindow}><X /></WindowControl>
               <WindowControl label="最小化" className="bg-[#ffbd2e]" onClick={minimiseWindow}><Minus /></WindowControl>
-              <WindowControl label={isWindowMaximised ? '还原窗口' : '最大化'} className="bg-[#28c840]" onClick={toggleMaximiseWindow}><Plus /></WindowControl>
+              <WindowControl label={isWindowMaximised ? '还原窗口' : '最大化'} className="bg-[#28c840]" onClick={toggleMaximiseWindow}><Maximize2 /></WindowControl>
             </div>
             <span className="text-xs font-semibold tracking-tight text-foreground">uSSH</span>
-            <div className="app-no-drag ml-auto flex items-center gap-1">
+            <div
+              className="app-no-drag ml-auto flex items-center gap-1"
+              onDoubleClick={event => event.stopPropagation()}
+            >
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -504,11 +600,12 @@ export function Shell() {
         </TooltipProvider>
         <div className="min-w-0 flex-1">
           <TabBar
-            tabs={tabs}
+            tabs={workspaceTabs}
             activeId={activeId}
             onSelect={selectTab}
             onClose={closeTab}
             onDisconnect={disconnectTab}
+            onClone={cloneTab}
             onTogglePinned={toggleTabPinned}
             onNewConnection={openNewConnection}
           />
@@ -527,14 +624,16 @@ export function Shell() {
           onResize={syncConnectionTreeWidth}
         >
           <ConnectionTree
-            tabs={tabs}
-            activeId={activeId}
+            workspaces={workspaces}
+            activeWorkspaceId={activeWorkspaceId}
+            onSwitchWorkspace={switchWorkspace}
+            onAddWorkspace={() => setShowNewWorkspaceDialog(true)}
             nodes={nodes}
-            onSelect={selectTab}
             onOpenSaved={connectSavedLink}
             onAddFolder={handleAddFolder}
             onAddLink={handleAddLink}
             onMoveNode={handleMoveNode}
+            onReorderNodes={handleReorderNodes}
             onEditSaved={handleEditSaved}
             onCloneSaved={handleCloneSaved}
             onDeleteSaved={handleDeleteSaved}
@@ -571,19 +670,7 @@ export function Shell() {
                       onNewConnection={openNewConnection}
                     />
                   ) : terminalActive ? (
-                    <>
-                      <TerminalView
-                        key={activeTab.id}
-                        tab={activeTab}
-                        onSend={onActiveSend}
-                        onResize={onActiveResize}
-                        onFocus={() => {}}
-                        onTermReady={onActiveTermReady}
-                        onReconnect={onActiveReconnect}
-                        terminalSettings={settings.terminal}
-                      />
-                      <TerminalActions active={activeUtility} onToggle={setActiveUtility} />
-                    </>
+                    <TerminalActions active={activeUtility} onToggle={setActiveUtility} />
                   ) : (
                     <ConnectionForm
                       initialForm={activeTab.form}
@@ -591,6 +678,31 @@ export function Shell() {
                       onPickFile={pickPrivateKeyFile}
                     />
                   )}
+                  <div className="pointer-events-none absolute inset-0">
+                    {tabs
+                      .filter(tab => tab.kind !== 'dashboard' && (
+                        tab.status === 'connected' || tab.status === 'connecting' || tab.status === 'closed'
+                      ))
+                      .map(tab => (
+                        <div
+                          key={tab.id}
+                          className={cn('absolute inset-0', tab.id === activeId ? 'visible pointer-events-auto' : 'invisible')}
+                        >
+                          <TerminalView
+                            tab={tab}
+                            active={tab.id === activeId}
+                            onSend={data => handleSend(tab.id, data)}
+                            onResize={size => handleResize(tab.id, size)}
+                            onFocus={() => {}}
+                            onTermReady={onActiveTermReady}
+                            onReconnect={() => {
+                              if (tab.status === 'closed' && tab.form) handleConnect(tab.id, tab.form);
+                            }}
+                            terminalSettings={settings.terminal}
+                          />
+                        </div>
+                      ))}
+                  </div>
                 </div>
               </Panel>
               {utilityPanelVisible && (
@@ -616,6 +728,7 @@ export function Shell() {
         activeTab={activeTab}
         activeConnectionCount={activeConnectionCount}
         globalStatus={globalStatus}
+        onRefreshSystemInfo={refreshSystemInfo}
       />
 
       <SettingsDialog
@@ -652,6 +765,12 @@ export function Shell() {
         onCreate={submitFolder}
       />
 
+      <NewWorkspaceDialog
+        open={showNewWorkspaceDialog}
+        onClose={() => setShowNewWorkspaceDialog(false)}
+        onCreate={handleCreateWorkspace}
+      />
+
       <ConfirmDeleteDialog
         open={deletingNode !== null}
         node={deletingNode}
@@ -669,13 +788,13 @@ function WindowControl({ label, className, onClick, children }) {
         <button
           type="button"
           className={cn(
-            'flex h-3 w-3 items-center justify-center rounded-full text-black/55 shadow-[inset_0_0_0_0.5px_rgb(0_0_0_/_0.18)] transition-transform duration-100 hover:brightness-95 active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+            'flex h-3.5 w-3.5 items-center justify-center rounded-full text-black/55 shadow-[inset_0_0_0_0.5px_rgb(0_0_0_/_0.18)] transition-transform duration-100 hover:brightness-95 active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
             className,
           )}
           onClick={onClick}
           aria-label={label}
         >
-          <span className="opacity-0 transition-opacity duration-100 group-hover/window-controls:opacity-100 [&_svg]:h-[7px] [&_svg]:w-[7px] [&_svg]:stroke-[2.4]">
+          <span className="opacity-0 transition-opacity duration-100 group-hover/window-controls:opacity-100 [&_svg]:h-2 [&_svg]:w-2 [&_svg]:stroke-[2.4]">
             {children}
           </span>
         </button>

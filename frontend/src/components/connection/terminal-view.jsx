@@ -4,7 +4,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { ClipboardGetText } from '../../../wailsjs/runtime/runtime';
 
-export function TerminalView({ tab, onSend, onResize, onFocus, onTermReady, onReconnect, terminalSettings }) {
+export function TerminalView({ tab, active = true, onSend, onResize, onFocus, onTermReady, onReconnect, terminalSettings }) {
   const hostRef = useRef(null);
   const termRef = useRef(null);
   const fitRef = useRef(null);
@@ -161,14 +161,14 @@ export function TerminalView({ tab, onSend, onResize, onFocus, onTermReady, onRe
   }, [ready, tab.status]);
 
   useEffect(() => {
-    if (ready && termRef.current && tab.id) {
+    if (active && ready && termRef.current && tab.id) {
       try {
         termRef.current.focus();
       } catch (_) {}
       onFocus();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, tab.id]);
+  }, [active, ready, tab.id]);
 
   return (
     <div className="app-no-drag relative h-full w-full overflow-hidden">

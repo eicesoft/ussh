@@ -3,19 +3,24 @@ import { api } from '@/lib/api';
 
 export function useSavedNodes() {
   const [nodes, setNodes] = useState([]);
+  const [loaded, setLoaded] = useState(false);
 
   const reload = useCallback(async () => {
-    const list = await api.listConnectionNodes();
-    setNodes(list || []);
+    try {
+      const list = await api.listConnectionNodes();
+      setNodes(list || []);
+    } finally {
+      setLoaded(true);
+    }
   }, []);
 
   useEffect(() => {
-    reload().catch(() => {});
+    reload().catch(() => setLoaded(true));
   }, [reload]);
 
   const createFolder = useCallback(
-    async (name, color) => {
-      await api.createFolder(0, name, color);
+    async (parentId, name, color) => {
+      await api.createFolder(Number(parentId) || 0, name, color);
       await reload();
     },
     [reload],
@@ -55,6 +60,14 @@ export function useSavedNodes() {
     [reload],
   );
 
+  const reorderNodes = useCallback(
+    async (parentId, orderedIds) => {
+      await api.reorderNodes(parentId, orderedIds);
+      await reload();
+    },
+    [reload],
+  );
+
   const updateSSHLink = useCallback(
     async (id, parentId, form) => {
       const updated = await api.updateSSHLink(id, parentId, form);
@@ -83,12 +96,14 @@ export function useSavedNodes() {
 
   return {
     nodes,
+    loaded,
     reload,
     createFolder,
     updateFolder,
     deleteFolder,
     createSSHLink,
     moveNode,
+    reorderNodes,
     updateSSHLink,
     cloneSSHLink,
     deleteSSHLink,

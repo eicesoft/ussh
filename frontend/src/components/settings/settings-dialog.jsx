@@ -193,6 +193,16 @@ export function SettingsDialog({ open, anchorRef, onClose, settings, onSave }) {
                 </SelectContent>
               </Select>
             </SettingRow>
+            <SettingRow
+              label="恢复打开的标签页"
+              description="下次启动时恢复各工作区中已保存的连接标签页，并自动重新连接。"
+            >
+              <Switch
+                checked={draft.restoreTabs !== false}
+                onCheckedChange={value => updateDraft('restoreTabs', value)}
+                aria-label="恢复打开的标签页"
+              />
+            </SettingRow>
             <SettingRow label="终端透明度" description="降低不透明度可透出终端背后的桌面背景。">
               <div className="flex items-center gap-2">
                 <Slider

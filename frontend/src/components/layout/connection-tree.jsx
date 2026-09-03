@@ -1,22 +1,25 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Copy, FolderPlus, Link2, Terminal, Pencil, ExternalLink, Search, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { TreeNode } from './tree-node';
 import { TreeFolder } from './tree-folder';
+import { WorkspaceList } from './workspace-list';
 
 export function ConnectionTree({
-  tabs,
-  activeId,
+  workspaces,
+  activeWorkspaceId,
+  onSwitchWorkspace,
+  onAddWorkspace,
   nodes,
-  onSelect,
   onOpenSaved,
   onAddFolder,
   onAddLink,
   onMoveNode,
+  onReorderNodes,
   onEditSaved,
   onCloneSaved,
   onDeleteSaved,
@@ -25,32 +28,107 @@ export function ConnectionTree({
 }) {
   const [rootDropping, setRootDropping] = useState(false);
   const [filterQuery, setFilterQuery] = useState('');
-  const connectionTabs = tabs.filter(tab => tab.kind !== 'dashboard');
-  const activeSessions = connectionTabs.filter(tab => tab.status === 'connected' || tab.status === 'connecting');
-  const inactiveSessions = connectionTabs.filter(tab => tab.status !== 'connected' && tab.status !== 'connecting');
-  const folders = nodes.filter(node => node.type === 'folder');
-  const rootLinks = nodes.filter(node => node.parentId === 0 && node.type === 'ssh');
+
+  useEffect(() => {
+    const clearRootDropState = () => setRootDropping(false);
+    document.addEventListener('dragend', clearRootDropState);
+    return () => document.removeEventListener('dragend', clearRootDropState);
+  }, []);
+
   const normalizedFilter = filterQuery.trim().toLocaleLowerCase();
+  const sortable = !normalizedFilter;
   const matchesFilter = node => {
     if (!normalizedFilter) return true;
     return [node.name, node.host, node.username, node.port]
       .filter(value => value !== undefined && value !== null)
       .some(value => String(value).toLocaleLowerCase().includes(normalizedFilter));
   };
-  const visibleFolders = folders
-    .map(folder => {
-      const folderMatches = matchesFilter(folder);
-      const links = nodes.filter(
-        node =>
-          node.parentId === folder.id &&
-          node.type === 'ssh' &&
-          (!normalizedFilter || folderMatches || matchesFilter(node)),
-      );
-      return { folder, links };
-    })
-    .filter(({ folder, links }) => !normalizedFilter || matchesFilter(folder) || links.length > 0);
-  const visibleRootLinks = rootLinks.filter(matchesFilter);
+  const foldersByParent = new Map();
+  const linksByParent = new Map();
+  nodes.forEach(node => {
+    const parentId = Number(node.parentId) || 0;
+    const groups = node.type === 'folder' ? foldersByParent : linksByParent;
+    if (!groups.has(parentId)) groups.set(parentId, []);
+    groups.get(parentId).push(node);
+  });
+
+  const buildVisibleFolders = (parentId = 0, showAll = false) => (
+    (foldersByParent.get(parentId) || [])
+      .map(folder => {
+        const folderMatches = showAll || matchesFilter(folder);
+        const childFolders = buildVisibleFolders(folder.id, folderMatches);
+        const links = (linksByParent.get(folder.id) || [])
+          .filter(link => folderMatches || !normalizedFilter || matchesFilter(link));
+        if (normalizedFilter && !folderMatches && childFolders.length === 0 && links.length === 0) return null;
+        return { folder, folders: childFolders, links };
+      })
+      .filter(Boolean)
+  );
+
+  const visibleFolders = buildVisibleFolders();
+  const visibleRootLinks = (linksByParent.get(0) || []).filter(matchesFilter);
   const hasVisibleSavedNodes = visibleFolders.length > 0 || visibleRootLinks.length > 0;
+  const nodeById = new Map(nodes.map(node => [node.id, node]));
+
+  const canReorderNode = (dragId, targetId) => {
+    if (!sortable || !onReorderNodes) return false;
+    const dragged = nodeById.get(Number(dragId));
+    const target = nodeById.get(Number(targetId));
+    if (!dragged || !target || dragged.id === target.id) return false;
+    const draggedParentId = Number(dragged.parentId) || 0;
+    const targetParentId = Number(target.parentId) || 0;
+    return draggedParentId === targetParentId && dragged.type === target.type;
+  };
+
+  const handleReorderNode = (dragId, targetId, position) => {
+    if (!canReorderNode(dragId, targetId)) return false;
+    const dragged = nodeById.get(Number(dragId));
+    const target = nodeById.get(Number(targetId));
+    const targetParentId = Number(target.parentId) || 0;
+
+    const siblings = nodes.filter(node => (
+      (Number(node.parentId) || 0) === targetParentId && node.type === target.type
+    ));
+    const reordered = siblings.filter(node => node.id !== dragged.id);
+    const targetIndex = reordered.findIndex(node => node.id === target.id);
+    if (targetIndex < 0) return false;
+    reordered.splice(position === 'before' ? targetIndex : targetIndex + 1, 0, dragged);
+    onReorderNodes(targetParentId, reordered.map(node => node.id));
+    return true;
+  };
+
+  const renderFolder = ({ folder, folders: childFolders, links }) => (
+    <TreeFolder
+      key={folder.id}
+      folder={folder}
+      onMoveNode={onMoveNode}
+      onReorderNode={handleReorderNode}
+      canReorderNode={canReorderNode}
+      sortable={sortable}
+      onAddFolder={onAddFolder}
+      onAddLink={onAddLink}
+      onEdit={onEditFolder}
+      onDelete={onDeleteFolder}
+      emptyHint="拖入连接或目录"
+    >
+      {childFolders.map(renderFolder)}
+      {links.map(node => (
+        <SavedRootNode
+          key={node.id}
+          node={node}
+          color={folder.color}
+          nested
+          onOpen={onOpenSaved}
+          onEdit={onEditSaved}
+          onClone={onCloneSaved}
+          onDelete={onDeleteSaved}
+          onReorderNode={handleReorderNode}
+          canReorderNode={canReorderNode}
+          sortable={sortable}
+        />
+      ))}
+    </TreeFolder>
+  );
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -60,34 +138,19 @@ export function ConnectionTree({
         onContextMenu={event => event.preventDefault()}
       >
         <ScrollArea className="app-drag flex-1 px-2.5 pt-2.5">
-          <div className="mb-1 px-1.5 text-[11px] font-medium text-[#66666b] dark:text-muted-foreground">
-            连接
-          </div>
-          {activeSessions.length > 0 ? (
-            activeSessions.map(tab => (
-              <TreeNode key={tab.id} tab={tab} active={tab.id === activeId} onSelect={onSelect} />
-            ))
-          ) : (
-            <p className="app-no-drag px-2.5 py-1 text-xs text-[#85858a] dark:text-muted-foreground">暂无活动连接</p>
-          )}
+          <WorkspaceList
+            workspaces={workspaces}
+            activeId={activeWorkspaceId}
+            onSelect={onSwitchWorkspace}
+            onAdd={onAddWorkspace}
+          />
 
-          {inactiveSessions.length > 0 && (
-            <>
-              <div className="mb-1 mt-3 px-1.5 text-[11px] font-medium text-[#66666b] dark:text-muted-foreground">
-                未连接
-              </div>
-              {inactiveSessions.map(tab => (
-                <TreeNode key={tab.id} tab={tab} active={tab.id === activeId} onSelect={onSelect} />
-              ))}
-            </>
-          )}
-
-          <div className="mb-1 mt-4 flex items-center justify-between px-1.5">
+          <div className="mb-1 mt-5 flex items-center justify-between px-1.5">
             <span className="text-[11px] font-medium text-[#66666b] dark:text-muted-foreground">已保存的连接</span>
             <div className="app-no-drag flex items-center gap-1">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-5 w-5 rounded-md text-[#77777d] hover:bg-[#e6e6e9] hover:text-[#36363b]" onClick={onAddFolder}>
+                  <Button variant="ghost" size="icon" className="h-5 w-5 rounded-md text-[#77777d] hover:bg-[#e6e6e9] hover:text-[#36363b]" onClick={() => onAddFolder?.(0)}>
                     <FolderPlus className="h-3.5 w-3.5" />
                   </Button>
                 </TooltipTrigger>
@@ -122,29 +185,7 @@ export function ConnectionTree({
             <p className="app-no-drag px-2.5 py-1 text-xs text-[#85858a] dark:text-muted-foreground">未找到匹配的保存连接</p>
           ) : (
             <>
-              {visibleFolders.map(({ folder, links }) => (
-                <TreeFolder
-                  key={folder.id}
-                  folder={folder}
-                  onMoveNode={onMoveNode}
-                  onAddLink={onAddLink}
-                  onEdit={onEditFolder}
-                  onDelete={onDeleteFolder}
-                  emptyHint="拖入连接"
-                >
-                  {links.map(node => (
-                    <SavedRootNode
-                      key={node.id}
-                      node={node}
-                      color={folder.color}
-                      onOpen={onOpenSaved}
-                      onEdit={onEditSaved}
-                      onClone={onCloneSaved}
-                      onDelete={onDeleteSaved}
-                    />
-                  ))}
-                </TreeFolder>
-              ))}
+              {visibleFolders.map(renderFolder)}
               <div
                 onDragOver={event => {
                   event.preventDefault();
@@ -176,6 +217,9 @@ export function ConnectionTree({
                     onEdit={onEditSaved}
                     onClone={onCloneSaved}
                     onDelete={onDeleteSaved}
+                    onReorderNode={handleReorderNode}
+                    canReorderNode={canReorderNode}
+                    sortable={sortable}
                   />
                 ))}
                 {visibleRootLinks.length === 0 && (
@@ -191,10 +235,40 @@ export function ConnectionTree({
   );
 }
 
-function SavedRootNode({ node, color, onOpen, onEdit, onClone, onDelete }) {
+function SavedRootNode({ node, color, nested = false, onOpen, onEdit, onClone, onDelete, onReorderNode, canReorderNode, sortable = true }) {
   const showEdit = Boolean(onEdit || onDelete);
   const [contextMenu, setContextMenu] = useState({ open: false, x: 0, y: 0 });
+  const [dropPosition, setDropPosition] = useState(null);
   const menuRef = useRef(null);
+
+  const handleDragOver = event => {
+    if (!sortable || !onReorderNode) return;
+    const dragId = Number(event.dataTransfer.getData('application/x-ussh-node'));
+    if (!dragId || dragId === node.id) return;
+    if (canReorderNode && !canReorderNode(dragId, node.id)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'move';
+    const rect = event.currentTarget.getBoundingClientRect();
+    setDropPosition(event.clientY < rect.top + rect.height / 2 ? 'before' : 'after');
+  };
+
+  const handleDrop = event => {
+    if (!sortable || !onReorderNode) return;
+    const dragId = Number(event.dataTransfer.getData('application/x-ussh-node'));
+    if (!dragId || dragId === node.id) return;
+    if (canReorderNode && !canReorderNode(dragId, node.id)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    onReorderNode(dragId, node.id, dropPosition || 'after');
+    setDropPosition(null);
+  };
+
+  useEffect(() => {
+    const clearDropPosition = () => setDropPosition(null);
+    document.addEventListener('dragend', clearDropPosition);
+    return () => document.removeEventListener('dragend', clearDropPosition);
+  }, []);
 
   useEffect(() => {
     if (!contextMenu.open) return;
@@ -223,6 +297,11 @@ function SavedRootNode({ node, color, onOpen, onEdit, onClone, onDelete }) {
           event.dataTransfer.setData('application/x-ussh-node', String(node.id));
           event.dataTransfer.effectAllowed = 'move';
         }}
+        onDragOver={handleDragOver}
+        onDragLeave={event => {
+          if (!event.currentTarget.contains(event.relatedTarget)) setDropPosition(null);
+        }}
+        onDrop={handleDrop}
         onDoubleClick={() => onOpen(node)}
         onKeyDown={event => {
           if (event.key === 'Enter' || event.key === ' ') {
@@ -237,8 +316,10 @@ function SavedRootNode({ node, color, onOpen, onEdit, onClone, onDelete }) {
         className="app-no-drag group relative flex h-7 cursor-grab items-center gap-2 rounded-[7px] px-2.5 text-[13px] font-normal text-[#2d2d31] transition-colors hover:bg-[#e8e8eb] active:cursor-grabbing dark:text-secondary-foreground dark:hover:bg-accent"
         title="双击连接"
       >
+        {dropPosition === 'before' && <span className="pointer-events-none absolute inset-x-1 top-0 h-0.5 rounded-full bg-primary" />}
+        {dropPosition === 'after' && <span className="pointer-events-none absolute inset-x-1 bottom-0 h-0.5 rounded-full bg-primary" />}
         <Terminal
-          className="h-3.5 w-3.5 shrink-0"
+          className={cn('h-3.5 w-3.5 shrink-0', nested && 'relative left-1')}
           style={color ? { color } : undefined}
           strokeWidth={1.8}
         />
@@ -261,7 +342,7 @@ function SavedRootNode({ node, color, onOpen, onEdit, onClone, onDelete }) {
           </span>
         )}
       </div>
-      {contextMenu.open && (
+      {contextMenu.open && createPortal(
         <div
           ref={menuRef}
           style={{ position: 'fixed', left: contextMenu.x, top: contextMenu.y, zIndex: 50 }}
@@ -312,7 +393,8 @@ function SavedRootNode({ node, color, onOpen, onEdit, onClone, onDelete }) {
               </div>
             </>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );

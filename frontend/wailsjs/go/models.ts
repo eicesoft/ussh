@@ -257,6 +257,7 @@ export namespace main {
 	    username: string;
 	    authType: string;
 	    color: string;
+	    sortOrder: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new SavedNode(source);
@@ -273,6 +274,7 @@ export namespace main {
 	        this.username = source["username"];
 	        this.authType = source["authType"];
 	        this.color = source["color"];
+	        this.sortOrder = source["sortOrder"];
 	    }
 	}
 	export class SftpEntry {
@@ -338,6 +340,8 @@ export namespace main {
 	    username: string;
 	    hostname: string;
 	    os: string;
+	    load: string;
+	    memory: string;
 	    kernel: string;
 	    architecture: string;
 	    shell: string;
@@ -355,6 +359,8 @@ export namespace main {
 	        this.username = source["username"];
 	        this.hostname = source["hostname"];
 	        this.os = source["os"];
+	        this.load = source["load"];
+	        this.memory = source["memory"];
 	        this.kernel = source["kernel"];
 	        this.architecture = source["architecture"];
 	        this.shell = source["shell"];

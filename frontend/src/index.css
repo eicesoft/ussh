@@ -121,6 +121,56 @@
     z-index: 20;
   }
 
+  /* 监控表格需要保留滚动能力，但滚动条尽量不占空间、不抢视觉焦点。 */
+  .monitor-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+  }
+
+  .monitor-scrollbar::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  .monitor-scrollbar::-webkit-scrollbar-track,
+  .monitor-scrollbar::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  .monitor-scrollbar::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background: rgba(148, 163, 184, 0.45);
+  }
+
+  .monitor-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.65);
+  }
+
+  /* 总览页滚动条与监控面板保持一致，避免使用浏览器默认的宽滚动条。 */
+  .dashboard-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+  }
+
+  .dashboard-scrollbar::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  .dashboard-scrollbar::-webkit-scrollbar-track,
+  .dashboard-scrollbar::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  .dashboard-scrollbar::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background: rgba(148, 163, 184, 0.45);
+  }
+
+  .dashboard-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.65);
+  }
+
   .ai-agent-code-scrollbar {
     scrollbar-width: thin;
   }

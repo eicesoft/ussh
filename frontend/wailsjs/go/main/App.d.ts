@@ -36,6 +36,8 @@ export function PickPrivateKeyFile():Promise<string>;
 
 export function PickSavePath(arg1:string):Promise<string>;
 
+export function ReorderNodes(arg1:number,arg2:Array<number>):Promise<void>;
+
 export function ResizeTerminal(arg1:string,arg2:main.TerminalSize):Promise<void>;
 
 export function ResolveApproval(arg1:string,arg2:string):Promise<void>;

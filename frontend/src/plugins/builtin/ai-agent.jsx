@@ -230,10 +230,10 @@ function RunBar({ step, onCopy }) {
   const output = normalizeRunOutput(result?.output || '');
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border/70 bg-secondary/35">
+    <div className="w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-border/70 bg-secondary/35">
       <button
         type="button"
-        className="flex w-full items-start gap-2 px-2 py-1.5 text-left transition-colors hover:bg-secondary/60"
+        className="flex w-full min-w-0 items-start gap-2 px-2 py-1.5 text-left transition-colors hover:bg-secondary/60"
         onClick={() => setExpanded(value => !value)}
         aria-expanded={expanded}
       >
@@ -245,9 +245,15 @@ function RunBar({ step, onCopy }) {
             {risk.text}
           </span>
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="flex flex-wrap items-center gap-1.5">
-            <code className="break-all font-mono text-[11px] leading-relaxed">{step.command}</code>
+        <span className="min-w-0 flex-1 overflow-hidden">
+          <span className="flex w-full min-w-0 items-center gap-1.5">
+            <code
+              className="block w-full min-w-0 max-w-full overflow-hidden break-all font-mono text-[11px] leading-relaxed"
+              style={{ display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2 }}
+              title={step.command}
+            >
+              {step.command}
+            </code>
           </span>
           {step.reason && (
             <span className="mt-0.5 block text-[10px] leading-relaxed text-muted-foreground">{step.reason}</span>
@@ -260,7 +266,7 @@ function RunBar({ step, onCopy }) {
       </button>
 
       {expanded && (
-        <div className="space-y-1.5 border-t border-border/60 px-2 py-1.5">
+        <div className="w-full min-w-0 max-w-full space-y-1.5 border-t border-border/60 px-2 py-1.5">
           <div className="flex items-start justify-between gap-2">
             <span className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">执行的命令</span>
             <button
@@ -273,7 +279,7 @@ function RunBar({ step, onCopy }) {
               <Copy className="h-3 w-3" />
             </button>
           </div>
-          <pre className="overflow-x-auto rounded bg-background/70 px-2 py-1.5 font-mono text-[10px] leading-relaxed">
+          <pre className="w-full min-w-0 max-w-full overflow-x-auto rounded bg-background/70 px-2 py-1.5 font-mono text-[10px] leading-relaxed">
             {step.command}
           </pre>
 
@@ -293,7 +299,7 @@ function RunBar({ step, onCopy }) {
           </div>
           {result ? (
             <>
-              <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded bg-background/70 px-2 py-1.5 font-mono text-[10px] leading-relaxed">
+              <pre className="w-full min-w-0 max-w-full max-h-56 overflow-auto whitespace-pre-wrap break-words rounded bg-background/70 px-2 py-1.5 font-mono text-[10px] leading-relaxed">
                 {output || '（无输出）'}
               </pre>
               <div className={`text-[10px] leading-relaxed ${status.className}`}>
@@ -800,9 +806,9 @@ function AIAgent() {
   const canExecute = activeTab?.status === 'connected';
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background/35">
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="space-y-3 p-3">
+    <div className="flex h-full w-full min-h-0 min-w-0 flex-col bg-background/35">
+      <ScrollArea className="ai-agent-scroll-area min-h-0 w-full flex-1">
+        <div className="w-full min-w-0 max-w-full space-y-3 p-3">
           {messages.length === 0 ? (
             <div className="flex min-h-36 flex-col items-center justify-center gap-2 px-5 text-center">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
@@ -818,7 +824,7 @@ function AIAgent() {
             const segments = readTurns(message);
             if (segments) {
               return (
-                <div key={`${index}-assistant`} className="space-y-1.5">
+                <div key={`${index}-assistant`} className="w-full min-w-0 space-y-1.5">
                   {segments.map(segment => {
                     if (segment.kind === 'run') {
                       return <RunBar key={`run-${segment.step}`} step={segment} onCopy={copyMessage} />;

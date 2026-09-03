@@ -98,6 +98,15 @@
     backdrop-filter: blur(24px) saturate(120%);
   }
 
+  /* Radix ScrollArea uses a table-like content wrapper for intrinsic sizing.
+     Long AI commands must not turn that intrinsic width into a wider sidebar. */
+  .ai-agent-scroll-area [data-radix-scroll-area-viewport] > div {
+    display: block !important;
+    width: 100%;
+    min-width: 0 !important;
+    max-width: 100%;
+  }
+
   .split-resizer {
     position: relative;
     isolation: isolate;

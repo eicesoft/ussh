@@ -41,9 +41,24 @@ type TerminalSize struct {
 	Rows    int `json:"rows"`
 }
 
+// ToolCall 描述模型发起的一次工具调用。增量拼接时 Arguments 逐步追加。
+type ToolCall struct {
+	Index    int    `json:"index,omitempty"`
+	ID       string `json:"id,omitempty"`
+	Type     string `json:"type,omitempty"`
+	Function struct {
+		Name      string `json:"name,omitempty"`
+		Arguments string `json:"arguments,omitempty"`
+	} `json:"function,omitempty"`
+}
+
 type AIChatMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
+	// 以下字段供智能体的 function calling 模式使用，普通聊天不带。
+	ToolCallID string     `json:"tool_call_id,omitempty"`
+	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
+	Name       string     `json:"name,omitempty"`
 }
 
 type sshConnection struct {
@@ -60,12 +75,45 @@ type App struct {
 	db          *sql.DB
 	aiMu        sync.Mutex
 	aiRequests  map[string]context.CancelFunc
+	// taps 让 Go 侧也能收到终端输出（智能体靠它读回命令结果）。
+	// 回调必须非阻塞，否则会拖死 SSH 读循环。
+	tapMu   sync.Mutex
+	taps    map[string][]tapEntry
+	tapSeq  int64
+	// agentRuns 保证同一终端同一时刻只有一条智能体命令在跑。
+	agentMu   sync.Mutex
+	agentRuns map[string]bool
+	// agentApprovals 保存等待用户授权的通道，key 为 requestID。
+	agentApprovals map[string]chan string
+	// sendInputForTest 仅由单测替换，用于在不建立真实 SSH 连接的前提下驱动智能体。
+	sendInputForTest func(tabId string, data string) error
+	// emitForTest 仅由单测替换，用于捕获事件；运行时为 nil，走真实 runtime.EventsEmit。
+	emitForTest func(event string, payload map[string]any)
+}
+
+func (a *App) emitEvent(event string, payload map[string]any) {
+	if a.emitForTest != nil {
+		a.emitForTest(event, payload)
+		return
+	}
+	runtime.EventsEmit(a.ctx, event, payload)
+}
+
+// writeToTerminal 向终端写入数据，单测可借 sendInputForTest 接管。
+func (a *App) writeToTerminal(tabId string, data string) error {
+	if a.sendInputForTest != nil {
+		return a.sendInputForTest(tabId, data)
+	}
+	return a.SendInput(tabId, data)
 }
 
 func NewApp() *App {
 	return &App{
-		connections: map[string]*sshConnection{},
-		aiRequests:  map[string]context.CancelFunc{},
+		connections:    map[string]*sshConnection{},
+		aiRequests:     map[string]context.CancelFunc{},
+		taps:           map[string][]tapEntry{},
+		agentRuns:      map[string]bool{},
+		agentApprovals: map[string]chan string{},
 	}
 }
 func (a *App) startup(ctx context.Context) {
@@ -362,7 +410,59 @@ type terminalEventWriter struct {
 
 func (w terminalEventWriter) Write(data []byte) (int, error) {
 	runtime.EventsEmit(w.app.ctx, "terminal-output", map[string]any{"tabId": w.tabId, "data": string(data)})
+	w.app.dispatchTap(w.tabId, data)
 	return len(data), nil
+}
+
+// tapEntry 带自增 token，让注销时能定位到自己（Go 的函数值不可比较）。
+type tapEntry struct {
+	token int64
+	fn    func([]byte)
+}
+
+// addTap 注册一个终端输出旁路，返回移除函数（可重复调用）。
+func (a *App) addTap(tabId string, fn func([]byte)) func() {
+	a.tapMu.Lock()
+	if a.taps == nil {
+		a.taps = map[string][]tapEntry{}
+	}
+	a.tapSeq++
+	token := a.tapSeq
+	a.taps[tabId] = append(a.taps[tabId], tapEntry{token: token, fn: fn})
+	a.tapMu.Unlock()
+
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			a.tapMu.Lock()
+			remaining := a.taps[tabId][:0]
+			for _, item := range a.taps[tabId] {
+				if item.token != token {
+					remaining = append(remaining, item)
+				}
+			}
+			if len(remaining) == 0 {
+				delete(a.taps, tabId)
+			} else {
+				a.taps[tabId] = remaining
+			}
+			a.tapMu.Unlock()
+		})
+	}
+}
+
+// dispatchTap 把终端输出转发给所有旁路消费者。
+// 这里复制一份切片后在锁外调用，避免回调里再触碰 taps 造成死锁。
+func (a *App) dispatchTap(tabId string, data []byte) {
+	a.tapMu.Lock()
+	list := make([]func([]byte), 0, len(a.taps[tabId]))
+	for _, entry := range a.taps[tabId] {
+		list = append(list, entry.fn)
+	}
+	a.tapMu.Unlock()
+	for _, fn := range list {
+		fn(data)
+	}
 }
 
 // FetchModels 从 OpenAI 兼容的 /models 端点获取模型列表。
@@ -556,7 +656,37 @@ func streamAIChat(ctx context.Context, baseURL, apiKey, model string, messages [
 		return nil
 	}
 
-	scanner := bufio.NewScanner(resp.Body)
+	return scanSSEStream(resp.Body, func(chunk sseChunk) {
+		if chunk.Content != "" {
+			onToken(chunk.Content)
+		}
+	})
+}
+
+// sseChunk 覆盖 /chat/completions 流式响应里我们关心的字段。
+// content 供普通聊天使用，tool_calls 与 finish_reason 供智能体的 function calling 模式使用。
+type sseChunk struct {
+	Content      string     // delta.content 或 message.content，已按优先级合并
+	ToolCalls    []ToolCall // delta.tool_calls 或 message.tool_calls
+	FinishReason string
+}
+
+// scanSSEStream 逐行解析 SSE，把每个 data 块交给 onChunk。
+// 普通聊天与智能体共用这一份解析，避免两条路径的解析逻辑漂移。
+func scanSSEStream(body io.Reader, onChunk func(sseChunk)) error {
+	type choice struct {
+		Delta struct {
+			Content   string     `json:"content"`
+			ToolCalls []ToolCall `json:"tool_calls"`
+		} `json:"delta"`
+		Message struct {
+			Content   string     `json:"content"`
+			ToolCalls []ToolCall `json:"tool_calls"`
+		} `json:"message"`
+		FinishReason string `json:"finish_reason"`
+	}
+
+	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 4096), 1024*1024)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -567,29 +697,30 @@ func streamAIChat(ctx context.Context, baseURL, apiKey, model string, messages [
 		if data == "" || data == "[DONE]" {
 			continue
 		}
-		var chunk struct {
-			Choices []struct {
-				Delta struct {
-					Content string `json:"content"`
-				} `json:"delta"`
-				Message struct {
-					Content string `json:"content"`
-				} `json:"message"`
-			} `json:"choices"`
+		// payload 必须每轮新建：复用同一结构体时 json.Unmarshal 不会清空
+		// 切片字段，tool_calls 会被反复追加。
+		var payload struct {
+			Choices []choice `json:"choices"`
 		}
-		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+		if err := json.Unmarshal([]byte(data), &payload); err != nil {
 			continue
 		}
-		if len(chunk.Choices) == 0 {
+		if len(payload.Choices) == 0 {
 			continue
 		}
-		token := chunk.Choices[0].Delta.Content
-		if token == "" {
-			token = chunk.Choices[0].Message.Content
+		choice := payload.Choices[0]
+		chunk := sseChunk{
+			Content:      choice.Delta.Content,
+			ToolCalls:    choice.Delta.ToolCalls,
+			FinishReason: choice.FinishReason,
 		}
-		if token != "" {
-			onToken(token)
+		if chunk.Content == "" {
+			chunk.Content = choice.Message.Content
 		}
+		if len(chunk.ToolCalls) == 0 {
+			chunk.ToolCalls = choice.Message.ToolCalls
+		}
+		onChunk(chunk)
 	}
 	if err := scanner.Err(); err != nil {
 		return fmt.Errorf("读取 AI 流式响应失败：%w", err)

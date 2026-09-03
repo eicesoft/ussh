@@ -66,6 +66,10 @@ export function ResizeTerminal(arg1, arg2) {
   return window['go']['main']['App']['ResizeTerminal'](arg1, arg2);
 }
 
+export function ResolveApproval(arg1, arg2) {
+  return window['go']['main']['App']['ResolveApproval'](arg1, arg2);
+}
+
 export function SendInput(arg1, arg2) {
   return window['go']['main']['App']['SendInput'](arg1, arg2);
 }
@@ -114,8 +118,16 @@ export function StartAIChat(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['StartAIChat'](arg1, arg2, arg3, arg4, arg5);
 }
 
+export function StartAgent(arg1) {
+  return window['go']['main']['App']['StartAgent'](arg1);
+}
+
 export function StopAIChat(arg1) {
   return window['go']['main']['App']['StopAIChat'](arg1);
+}
+
+export function StopAgent(arg1) {
+  return window['go']['main']['App']['StopAgent'](arg1);
 }
 
 export function UpdateFolder(arg1, arg2, arg3) {

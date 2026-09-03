@@ -34,6 +34,8 @@ export function PickSavePath(arg1:string):Promise<string>;
 
 export function ResizeTerminal(arg1:string,arg2:main.TerminalSize):Promise<void>;
 
+export function ResolveApproval(arg1:string,arg2:string):Promise<void>;
+
 export function SendInput(arg1:string,arg2:string):Promise<void>;
 
 export function SetBackdropType(arg1:string):Promise<void>;
@@ -58,7 +60,11 @@ export function SftpWrite(arg1:string,arg2:string,arg3:Array<number>):Promise<vo
 
 export function StartAIChat(arg1:string,arg2:string,arg3:string,arg4:string,arg5:Array<main.AIChatMessage>):Promise<void>;
 
+export function StartAgent(arg1:main.AgentRequest):Promise<void>;
+
 export function StopAIChat(arg1:string):Promise<void>;
+
+export function StopAgent(arg1:string):Promise<void>;
 
 export function UpdateFolder(arg1:number,arg2:string,arg3:string):Promise<main.SavedNode>;
 

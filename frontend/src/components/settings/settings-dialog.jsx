@@ -90,6 +90,12 @@ export function SettingsDialog({ open, anchorRef, onClose, settings, onSave }) {
       setModelError('');
     }
   };
+  const updateAgentDraft = (key, value) => {
+    setDraft(current => ({
+      ...current,
+      ai: { ...current.ai, agent: { ...current.ai.agent, [key]: value } },
+    }));
+  };
   const fetchModels = async () => {
     const baseURL = draft.ai?.baseURL?.trim();
     if (!baseURL) {
@@ -332,6 +338,52 @@ export function SettingsDialog({ open, anchorRef, onClose, settings, onSave }) {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
+            </SettingRow>
+            <SettingRow
+              label="只读命令自动执行"
+              description="ls、cat、df、ps 等只读命令直接执行，不弹确认框。其余命令始终需要确认。"
+            >
+              <Switch
+                checked={draft.ai?.agent?.autoApproveReadonly !== false}
+                onCheckedChange={value => updateAgentDraft('autoApproveReadonly', value)}
+                aria-label="只读命令自动执行"
+              />
+            </SettingRow>
+            <SettingRow
+              label="使用原生 function calling"
+              description="关闭时改用文本块解析动作，兼容所有 OpenAI 兼容端点。"
+            >
+              <Switch
+                checked={draft.ai?.agent?.useTools === true}
+                onCheckedChange={value => updateAgentDraft('useTools', value)}
+                aria-label="使用原生 function calling"
+              />
+            </SettingRow>
+            <SettingRow label="单任务最大步数" description="限制一个任务最多执行多少条命令，防止死循环。">
+              <Select
+                value={String(draft.ai?.agent?.maxSteps || 12)}
+                onValueChange={value => updateAgentDraft('maxSteps', Number(value))}
+              >
+                <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[6, 12, 20].map(value => (
+                    <SelectItem key={value} value={String(value)}>{value} 步</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </SettingRow>
+            <SettingRow label="单命令超时" description="超过该时间会中断命令，并把已产生的输出交给智能体判断。">
+              <Select
+                value={String(draft.ai?.agent?.commandTimeoutSec || 30)}
+                onValueChange={value => updateAgentDraft('commandTimeoutSec', Number(value))}
+              >
+                <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[15, 30, 60, 120].map(value => (
+                    <SelectItem key={value} value={String(value)}>{value} 秒</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </SettingRow>
             {modelError && (
               <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">

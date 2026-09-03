@@ -1,8 +1,48 @@
 export namespace main {
 	
+	export class ToolCall {
+	    index?: number;
+	    id?: string;
+	    type?: string;
+	    // Go type: struct { Name string "json:\"name,omitempty\""; Arguments string "json:\"arguments,omitempty\"" }
+	    function?: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new ToolCall(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.index = source["index"];
+	        this.id = source["id"];
+	        this.type = source["type"];
+	        this.function = this.convertValues(source["function"], Object);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class AIChatMessage {
 	    role: string;
 	    content: string;
+	    tool_call_id?: string;
+	    tool_calls?: ToolCall[];
+	    name?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AIChatMessage(source);
@@ -12,7 +52,108 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.role = source["role"];
 	        this.content = source["content"];
+	        this.tool_call_id = source["tool_call_id"];
+	        this.tool_calls = this.convertValues(source["tool_calls"], ToolCall);
+	        this.name = source["name"];
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class AgentContext {
+	    host: string;
+	    username: string;
+	    cwd: string;
+	    os: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AgentContext(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.host = source["host"];
+	        this.username = source["username"];
+	        this.cwd = source["cwd"];
+	        this.os = source["os"];
+	    }
+	}
+	export class AgentOptions {
+	    autoApproveReadonly: boolean;
+	    useTools: boolean;
+	    maxSteps: number;
+	    commandTimeoutSec: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new AgentOptions(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.autoApproveReadonly = source["autoApproveReadonly"];
+	        this.useTools = source["useTools"];
+	        this.maxSteps = source["maxSteps"];
+	        this.commandTimeoutSec = source["commandTimeoutSec"];
+	    }
+	}
+	export class AgentRequest {
+	    requestId: string;
+	    tabId: string;
+	    baseURL: string;
+	    apiKey: string;
+	    model: string;
+	    messages: AIChatMessage[];
+	    context: AgentContext;
+	    options: AgentOptions;
+	
+	    static createFrom(source: any = {}) {
+	        return new AgentRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.requestId = source["requestId"];
+	        this.tabId = source["tabId"];
+	        this.baseURL = source["baseURL"];
+	        this.apiKey = source["apiKey"];
+	        this.model = source["model"];
+	        this.messages = this.convertValues(source["messages"], AIChatMessage);
+	        this.context = this.convertValues(source["context"], AgentContext);
+	        this.options = this.convertValues(source["options"], AgentOptions);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class ConnectionConfig {
 	    host: string;

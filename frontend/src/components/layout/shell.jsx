@@ -419,6 +419,9 @@ export function Shell() {
   const activeConnectionCount = tabs.filter(
     tab => tab.kind !== 'dashboard' && (tab.status === 'connected' || tab.status === 'connecting'),
   ).length;
+  // AI 智能体的流式监听不能因为切到未连接标签或总览而卸载；
+  // 具体工具仍只在终端标签中显示，AI 会话按标签自行隔离。
+  const utilityPanelVisible = activeUtility && (terminalActive || activeUtility === 'ai-agent');
 
   const pluginContext = useMemo(() => ({
     activeTab,
@@ -578,7 +581,7 @@ export function Shell() {
                   )}
                 </div>
               </Panel>
-              {terminalActive && activeUtility && (
+              {utilityPanelVisible && (
                 <>
                   <Separator className="split-resizer" />
                   <Panel

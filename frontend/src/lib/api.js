@@ -108,6 +108,41 @@ export const api = {
   onAIChatError(handler) {
     return onAIChatError(handler);
   },
+  async startAgent(request) {
+    const app = appApi();
+    if (!app?.StartAgent) throw new Error('AI 智能体服务不可用，请在 uSSH 应用中运行。');
+    return app.StartAgent(request);
+  },
+  async stopAgent(requestId) {
+    return appApi()?.StopAgent(requestId);
+  },
+  async resolveApproval(requestId, decision) {
+    return appApi()?.ResolveApproval(requestId, decision);
+  },
+  onAgentText(handler) {
+    return onAgentText(handler);
+  },
+  onAgentStep(handler) {
+    return onAgentStep(handler);
+  },
+  onAgentAction(handler) {
+    return onAgentAction(handler);
+  },
+  onAgentResult(handler) {
+    return onAgentResult(handler);
+  },
+  onAgentApproval(handler) {
+    return onAgentApproval(handler);
+  },
+  onAgentDenied(handler) {
+    return onAgentDenied(handler);
+  },
+  onAgentDone(handler) {
+    return onAgentDone(handler);
+  },
+  onAgentError(handler) {
+    return onAgentError(handler);
+  },
 };
 
 export function onTerminalOutput(handler) {
@@ -143,6 +178,40 @@ export function onAIChatDone(handler) {
 export function onAIChatError(handler) {
   EventsOn('ai-chat-error', handler);
   return () => EventsOff('ai-chat-error', handler);
+}
+
+// 智能体事件：Go 端循环推送，前端只负责渲染与授权回应。
+const AGENT_EVENTS = [
+  'ai-agent-text',
+  'ai-agent-step',
+  'ai-agent-action',
+  'ai-agent-result',
+  'ai-agent-approval',
+  'ai-agent-denied',
+  'ai-agent-done',
+  'ai-agent-error',
+];
+
+function onAgentEvent(event) {
+  return handler => {
+    EventsOn(event, handler);
+    return () => EventsOff(event, handler);
+  };
+}
+
+export const onAgentText = onAgentEvent('ai-agent-text');
+export const onAgentStep = onAgentEvent('ai-agent-step');
+export const onAgentAction = onAgentEvent('ai-agent-action');
+export const onAgentResult = onAgentEvent('ai-agent-result');
+export const onAgentApproval = onAgentEvent('ai-agent-approval');
+export const onAgentDenied = onAgentEvent('ai-agent-denied');
+export const onAgentDone = onAgentEvent('ai-agent-done');
+export const onAgentError = onAgentEvent('ai-agent-error');
+
+// onAgentAny 一次订阅全部智能体事件，便于按 requestId 统一分发。
+export function onAgentAny(handler) {
+  const offs = AGENT_EVENTS.map(event => onAgentEvent(event)(payload => handler(event, payload)));
+  return () => offs.forEach(off => off());
 }
 
 export const runtimeAvailable = Boolean(typeof window !== 'undefined' && window.runtime);

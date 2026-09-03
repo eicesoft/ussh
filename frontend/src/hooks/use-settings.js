@@ -20,9 +20,17 @@ const DEFAULT_SETTINGS = {
     apiKey: '',
     model: '',
     visibleModels: [],
+    agent: {
+      autoApproveReadonly: true,
+      useTools: false,
+      maxSteps: 12,
+      commandTimeoutSec: 30,
+    },
   },
 };
 const DENSITIES = ['compact', 'default', 'comfortable'];
+const AGENT_MAX_STEPS = [6, 12, 20];
+const AGENT_TIMEOUTS = [15, 30, 60, 120];
 const FONT_SIZES = [12, 13, 14, 15, 16];
 const SCROLLBACK_VALUES = [1000, 5000, 10000, 20000];
 const MIN_OPACITY = 10;
@@ -34,6 +42,7 @@ function readSettings() {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
     const terminal = stored.terminal || {};
     const ai = stored.ai || {};
+    const agent = ai.agent || {};
     return {
       density: DENSITIES.includes(stored.density) ? stored.density : DEFAULT_SETTINGS.density,
       gpuAcceleration: typeof stored.gpuAcceleration === 'boolean' ? stored.gpuAcceleration : DEFAULT_SETTINGS.gpuAcceleration,
@@ -56,6 +65,16 @@ function readSettings() {
         apiKey: typeof ai.apiKey === 'string' ? ai.apiKey : DEFAULT_SETTINGS.ai.apiKey,
         model: typeof ai.model === 'string' ? ai.model : DEFAULT_SETTINGS.ai.model,
         visibleModels: Array.isArray(ai.visibleModels) ? ai.visibleModels : DEFAULT_SETTINGS.ai.visibleModels,
+        agent: {
+          autoApproveReadonly: typeof agent.autoApproveReadonly === 'boolean'
+            ? agent.autoApproveReadonly
+            : DEFAULT_SETTINGS.ai.agent.autoApproveReadonly,
+          useTools: typeof agent.useTools === 'boolean' ? agent.useTools : DEFAULT_SETTINGS.ai.agent.useTools,
+          maxSteps: AGENT_MAX_STEPS.includes(agent.maxSteps) ? agent.maxSteps : DEFAULT_SETTINGS.ai.agent.maxSteps,
+          commandTimeoutSec: AGENT_TIMEOUTS.includes(agent.commandTimeoutSec)
+            ? agent.commandTimeoutSec
+            : DEFAULT_SETTINGS.ai.agent.commandTimeoutSec,
+        },
       },
     };
   } catch (_) {

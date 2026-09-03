@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 const STORAGE_KEY = 'ussh-settings';
 const DEFAULT_SETTINGS = {
   density: 'compact',
+  restoreTabs: true,
   gpuAcceleration: true,
   backdropType: 'acrylic',
   terminal: {
@@ -45,6 +46,7 @@ function readSettings() {
     const agent = ai.agent || {};
     return {
       density: DENSITIES.includes(stored.density) ? stored.density : DEFAULT_SETTINGS.density,
+      restoreTabs: typeof stored.restoreTabs === 'boolean' ? stored.restoreTabs : DEFAULT_SETTINGS.restoreTabs,
       gpuAcceleration: typeof stored.gpuAcceleration === 'boolean' ? stored.gpuAcceleration : DEFAULT_SETTINGS.gpuAcceleration,
       backdropType: BACKDROP_TYPES.includes(stored.backdropType) ? stored.backdropType : DEFAULT_SETTINGS.backdropType,
       terminal: {

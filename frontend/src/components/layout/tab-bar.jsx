@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { LayoutDashboard, Pin, PinOff, Plus, Unplug, X } from 'lucide-react';
+import { Copy, LayoutDashboard, Pin, PinOff, Plus, Unplug, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -41,7 +41,7 @@ const authText = {
   keyfile: '密钥文件',
 };
 
-export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onTogglePinned, onNewConnection }) {
+export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onClone, onTogglePinned, onNewConnection }) {
   const scrollRef = useRef(null);
   const [contextTabId, setContextTabId] = useState(null);
   const [pendingCloseTabId, setPendingCloseTabId] = useState(null);
@@ -144,11 +144,12 @@ export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onTogg
                       onSelect(tab.id);
                       event.preventDefault();
                     }}
+                    onDoubleClick={event => event.stopPropagation()}
                     onMouseDown={event => {
                       if (event.button !== 1) return;
                       event.preventDefault();
                       event.stopPropagation();
-                      if (tab.closable) onClose(tab.id);
+                      if (tab.closable) requestClose(tab);
                     }}
                     onContextMenu={event => {
                       event.preventDefault();
@@ -253,6 +254,13 @@ export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onTogg
                         <X className="h-3.5 w-3.5" />
                         关闭
                       </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={tab.kind === 'dashboard' || !tab.form}
+                        onSelect={() => onClone(tab)}
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        克隆标签页
+                      </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onSelect={() => onTogglePinned(tab.id)}>
                         {tab.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
@@ -270,6 +278,7 @@ export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onTogg
                   width: 'calc(var(--density-tab-height) - 8px)',
                 }}
                 onClick={onNewConnection}
+                onDoubleClick={event => event.stopPropagation()}
                 aria-label="新增连接"
               >
                 <Plus className="h-4 w-4" />

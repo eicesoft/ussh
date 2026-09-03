@@ -49,6 +49,8 @@ type SystemInfo struct {
 	Username     string `json:"username"`
 	Hostname     string `json:"hostname"`
 	OS           string `json:"os"`
+	Load         string `json:"load"`
+	Memory       string `json:"memory"`
 	Kernel       string `json:"kernel"`
 	Architecture string `json:"architecture"`
 	Shell        string `json:"shell"`
@@ -56,7 +58,18 @@ type SystemInfo struct {
 	Uptime       string `json:"uptime"`
 }
 
-const systemInfoCommand = `printf '%s\n' '__USSH_INFO_BEGIN__'; printf 'hostname=%s\n' "$(hostname 2>/dev/null || true)"; printf 'os=%s\n' "$(if [ -r /etc/os-release ]; then . /etc/os-release; printf '%s' "${PRETTY_NAME:-${NAME:-}}"; else uname -s 2>/dev/null || true; fi)"; printf 'kernel=%s\n' "$(uname -r 2>/dev/null || true)"; printf 'architecture=%s\n' "$(uname -m 2>/dev/null || true)"; printf 'shell=%s\n' "${SHELL:-}"; printf 'cwd=%s\n' "${PWD:-}"; printf 'uptime=%s\n' "$(uptime -p 2>/dev/null || uptime 2>/dev/null || true)"; printf '%s\n' '__USSH_INFO_END__'`
+const systemInfoCommand = `
+printf '%s\n' '__USSH_INFO_BEGIN__'
+printf 'hostname=%s\n' "$(hostname 2>/dev/null || true)"
+printf 'os=%s\n' "$(if [ -r /etc/os-release ]; then . /etc/os-release; printf '%s' "${PRETTY_NAME:-${NAME:-}}"; else uname -s 2>/dev/null || true; fi)"
+printf 'load=%s\n' "$(if [ -r /proc/loadavg ]; then awk '{print $1}' /proc/loadavg 2>/dev/null; else uptime 2>/dev/null | awk -F'load averages?: ' '{print $2}' | awk '{print $1}'; fi)"
+printf 'memory=%s%%\n' "$(if [ -r /proc/meminfo ]; then awk '/MemTotal:/ {total=$2} /MemAvailable:/ {available=$2} END {if (total > 0) print int((total-available)*100/total+0.5)}' /proc/meminfo; elif command -v memory_pressure >/dev/null 2>&1; then memory_pressure -Q 2>/dev/null | awk -F': ' '/System-wide memory free percentage:/ {print int(100 - substr($2, 1, length($2)-1) + 0.5)}'; elif command -v vm_stat >/dev/null 2>&1 && command -v sysctl >/dev/null 2>&1; then total=$(sysctl -n hw.memsize 2>/dev/null); page_size=$(vm_stat | awk '/page size of/ {print $(NF-1)}'); used_pages=$(vm_stat | awk '/Pages active/ || /Pages wired down/ || /Pages occupied by compressor/ {print $NF}' | tr -d . | awk '{used += $1} END {print used+0}'); if [ -n \"$total\" ] && [ -n \"$page_size\" ] && [ \"$total\" -gt 0 ] 2>/dev/null; then awk -v used=\"$used_pages\" -v page=\"$page_size\" -v total=\"$total\" 'BEGIN {print int(used*page*100/total+0.5)}'; fi; fi)"
+printf 'kernel=%s\n' "$(uname -r 2>/dev/null || true)"
+printf 'architecture=%s\n' "$(uname -m 2>/dev/null || true)"
+printf 'shell=%s\n' "${SHELL:-}"
+printf 'cwd=%s\n' "${PWD:-}"
+printf 'uptime=%s\n' "$(uptime -p 2>/dev/null || uptime 2>/dev/null || true)"
+printf '%s\n' '__USSH_INFO_END__'`
 
 // ToolCall 描述模型发起的一次工具调用。增量拼接时 Arguments 逐步追加。
 type ToolCall struct {
@@ -309,6 +322,8 @@ func parseSystemInfo(info SystemInfo, output string) (SystemInfo, error) {
 	values := map[string]*string{
 		"hostname":     &info.Hostname,
 		"os":           &info.OS,
+		"load":         &info.Load,
+		"memory":       &info.Memory,
 		"kernel":       &info.Kernel,
 		"architecture": &info.Architecture,
 		"shell":        &info.Shell,

@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { getPluginsByType } from '@/plugins/registry';
+import { cn } from '@/lib/utils';
 
 export function UtilityRail({ active, onToggle }) {
   const items = getPluginsByType('tool');
@@ -15,9 +16,12 @@ export function UtilityRail({ active, onToggle }) {
           <Tooltip key={id}>
             <TooltipTrigger asChild>
               <Button
-                variant={active === id ? 'default' : 'ghost'}
+                variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className={cn(
+                  'h-7 w-7',
+                  active === id && 'bg-primary/15 text-primary ring-1 ring-primary/30 hover:bg-primary/20 hover:text-primary',
+                )}
                 onClick={() => onToggle(active === id ? null : id)}
                 aria-label={title}
               >

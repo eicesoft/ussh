@@ -64,7 +64,7 @@ export function NewFolderDialog({
         <DialogHeader>
           <DialogTitle>{mode === 'edit' ? '编辑文件夹' : '新建文件夹'}</DialogTitle>
           <DialogDescription>
-            {mode === 'edit' ? '修改连接树中的文件夹名称。' : '文件夹用于在侧栏分组管理保存的 SSH 连接。'}
+            {mode === 'edit' ? '修改连接树中的文件夹名称。' : '文件夹用于在侧栏分组管理保存的 SSH 连接，也可以嵌套创建子目录。'}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-3">

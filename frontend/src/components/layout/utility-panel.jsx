@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { History, MessageSquarePlus, X } from 'lucide-react';
+import { History, MessageSquarePlus, RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getPlugin } from '@/plugins/registry';
 import { usePluginContext } from '@/plugins/context';
@@ -116,6 +116,18 @@ export function UtilityPanel({ active, onToggle }) {
               </Button>
               <AgentHistoryMenu tabId={activeTab?.id} />
             </>
+          )}
+          {active === 'monitor' && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => window.dispatchEvent(new Event('monitor-refresh'))}
+              aria-label="刷新监控"
+              title="刷新监控"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+            </Button>
           )}
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onToggle(null)} aria-label="关闭面板">
             <X className="h-4 w-4" />

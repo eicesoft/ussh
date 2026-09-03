@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Folder, File, Home, ArrowLeft, RefreshCw,
+  Folder, File, FolderSync, Home, ArrowLeft, RefreshCw,
   Copy, Download, Edit3, Trash2, FileUp, FolderUp, X,
 } from 'lucide-react';
 import { registerPlugin } from '../registry';
@@ -732,6 +732,6 @@ registerPlugin({
   id: 'files',
   type: 'tool',
   title: '文件传输',
-  icon: File,
+  icon: FolderSync,
   component: FileBrowser,
 });

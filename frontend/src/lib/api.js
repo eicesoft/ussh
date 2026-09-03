@@ -44,6 +44,9 @@ export const api = {
   async moveNode(id, parentId) {
     return appApi()?.MoveNode(id, parentId);
   },
+  async reorderNodes(parentId, orderedIds) {
+    return appApi()?.ReorderNodes(parentId, orderedIds);
+  },
   async updateSSHLink(id, parentId, form) {
     return appApi()?.UpdateSSHLink(id, parentId, form);
   },

@@ -70,6 +70,10 @@ export function PickSavePath(arg1) {
   return window['go']['main']['App']['PickSavePath'](arg1);
 }
 
+export function ReorderNodes(arg1, arg2) {
+  return window['go']['main']['App']['ReorderNodes'](arg1, arg2);
+}
+
 export function ResizeTerminal(arg1, arg2) {
   return window['go']['main']['App']['ResizeTerminal'](arg1, arg2);
 }

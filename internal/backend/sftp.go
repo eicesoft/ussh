@@ -1,4 +1,4 @@
-package main
+package backend
 
 import (
 	"fmt"
@@ -285,4 +285,3 @@ func formatSize(size int64) string {
 	}
 	return fmt.Sprintf("%.1f %cB", float64(size)/float64(div), "KMGTPE"[exp])
 }
-

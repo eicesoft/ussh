@@ -14,6 +14,7 @@ export function ConnectionTree({
   activeWorkspaceId,
   onSwitchWorkspace,
   onAddWorkspace,
+  onDeleteWorkspace,
   nodes,
   onOpenSaved,
   onAddFolder,
@@ -133,16 +134,17 @@ export function ConnectionTree({
   return (
     <TooltipProvider delayDuration={300}>
       <aside
-        className="acrylic-panel flex h-full flex-col select-none text-[#2d2d31] dark:text-secondary-foreground"
+        className="acrylic-panel flex h-full min-h-0 flex-col overflow-hidden select-none text-[#2d2d31] dark:text-foreground"
         aria-label="连接管理"
         onContextMenu={event => event.preventDefault()}
       >
-        <ScrollArea className="app-drag flex-1 px-2.5 pt-2.5">
+        <div className="app-drag shrink-0 px-2.5 pt-2.5">
           <WorkspaceList
             workspaces={workspaces}
             activeId={activeWorkspaceId}
             onSelect={onSwitchWorkspace}
             onAdd={onAddWorkspace}
+            onDelete={onDeleteWorkspace}
           />
 
           <div className="mb-1 mt-5 flex items-center justify-between px-1.5">
@@ -150,7 +152,7 @@ export function ConnectionTree({
             <div className="app-no-drag flex items-center gap-1">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-5 w-5 rounded-md text-[#77777d] hover:bg-[#e6e6e9] hover:text-[#36363b]" onClick={() => onAddFolder?.(0)}>
+                  <Button variant="ghost" size="icon" className="h-5 w-5 rounded-md text-[#77777d] hover:bg-foreground/10 hover:text-[#36363b] dark:text-muted-foreground dark:hover:text-foreground" onClick={() => onAddFolder?.(0)}>
                     <FolderPlus className="h-3.5 w-3.5" />
                   </Button>
                 </TooltipTrigger>
@@ -158,7 +160,7 @@ export function ConnectionTree({
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-5 w-5 rounded-md text-[#77777d] hover:bg-[#e6e6e9] hover:text-[#36363b]" onClick={() => onAddLink?.(0)}>
+                  <Button variant="ghost" size="icon" className="h-5 w-5 rounded-md text-[#77777d] hover:bg-foreground/10 hover:text-[#36363b] dark:text-muted-foreground dark:hover:text-foreground" onClick={() => onAddLink?.(0)}>
                     <Link2 className="h-3.5 w-3.5" />
                   </Button>
                 </TooltipTrigger>
@@ -176,9 +178,12 @@ export function ConnectionTree({
               }}
               placeholder="过滤保存的连接"
               aria-label="过滤保存的连接"
-              className="h-7 rounded-md border-transparent bg-[#ececef] pl-8 pr-2 text-xs shadow-none placeholder:text-[#8b8b90] focus-visible:border-ring focus-visible:ring-0 focus-visible:ring-offset-0 dark:bg-background/60"
+              className="h-7 rounded-md border-transparent bg-foreground/[0.08] pl-8 pr-2 text-xs shadow-none placeholder:text-[#8b8b90] focus-visible:border-ring focus-visible:ring-0 focus-visible:ring-offset-0 dark:bg-background/60 dark:text-foreground dark:placeholder:text-muted-foreground"
             />
           </div>
+        </div>
+
+        <ScrollArea className="app-drag min-h-0 flex-1 px-2.5">
           {nodes.length === 0 ? (
             <p className="app-no-drag px-2.5 py-1 text-xs text-[#85858a] dark:text-muted-foreground">添加常用 SSH 连接</p>
           ) : !hasVisibleSavedNodes ? (
@@ -229,7 +234,6 @@ export function ConnectionTree({
             </>
           )}
         </ScrollArea>
-
       </aside>
     </TooltipProvider>
   );
@@ -313,7 +317,7 @@ function SavedRootNode({ node, color, nested = false, onOpen, onEdit, onClone, o
           event.preventDefault();
           setContextMenu({ open: true, x: event.clientX, y: event.clientY });
         }}
-        className="app-no-drag group relative flex h-7 cursor-grab items-center gap-2 rounded-[7px] px-2.5 text-[13px] font-normal text-[#2d2d31] transition-colors hover:bg-[#e8e8eb] active:cursor-grabbing dark:text-secondary-foreground dark:hover:bg-accent"
+        className="app-no-drag group relative flex h-7 cursor-grab items-center gap-2 rounded-[7px] px-2.5 text-[13px] font-normal text-[#2d2d31] transition-colors hover:bg-[#e8e8eb] active:cursor-grabbing dark:text-foreground dark:hover:bg-accent"
         title="双击连接"
       >
         {dropPosition === 'before' && <span className="pointer-events-none absolute inset-x-1 top-0 h-0.5 rounded-full bg-primary" />}

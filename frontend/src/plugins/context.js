@@ -9,6 +9,7 @@ import { createContext, useContext } from 'react';
  * - disconnect: 断开指定连接
  * - api: 底层 Go 桥接 API（connect, sendInput, resizeTerminal 等）
  * - settings: 当前应用设置（包括 AI 配置）
+ * - setHeaderActions: 注册右侧工具面板标题栏操作按钮（由面板注入）
  */
 export const PluginContext = createContext(null);
 

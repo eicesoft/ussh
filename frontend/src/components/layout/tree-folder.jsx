@@ -78,7 +78,7 @@ export function TreeFolder({ folder, children, emptyHint, onMoveNode, onReorderN
             variant="ghost"
             size="sm"
             draggable={Boolean(onMoveNode)}
-            className="app-no-drag relative h-7 w-full justify-start gap-1.5 rounded-[7px] px-2.5 text-[13px] font-normal text-[#3c3c41] hover:bg-[#e8e8eb] hover:text-[#242429] dark:text-muted-foreground dark:hover:bg-accent dark:hover:text-secondary-foreground"
+            className="app-no-drag relative h-7 w-full justify-start gap-1.5 rounded-[7px] px-2.5 text-[13px] font-normal text-[#3c3c41] hover:bg-[#e8e8eb] hover:text-[#242429] dark:text-foreground dark:hover:bg-accent dark:hover:text-foreground"
             onDragStart={event => {
               event.dataTransfer.setData('application/x-ussh-node', String(folder.id));
               event.dataTransfer.effectAllowed = 'move';
@@ -126,14 +126,14 @@ export function TreeFolder({ folder, children, emptyHint, onMoveNode, onReorderN
             {dropPosition === 'after' && <span className="pointer-events-none absolute inset-x-1 bottom-0 h-0.5 rounded-full bg-primary" />}
             <ChevronRight
               className={cn(
-                'h-3.5 w-3.5 shrink-0 text-[#85858a] transition-transform duration-200',
+                'h-3.5 w-3.5 shrink-0 text-[#85858a] transition-transform duration-200 dark:text-muted-foreground',
                 open && 'rotate-90',
               )}
             />
             {open ? (
-              <FolderOpen className="h-3.5 w-3.5 shrink-0 text-[#7b7b81]" strokeWidth={1.7} />
+              <FolderOpen className="h-3.5 w-3.5 shrink-0 text-[#7b7b81] dark:text-muted-foreground" strokeWidth={1.7} />
             ) : (
-              <Folder className="h-3.5 w-3.5 shrink-0 text-[#7b7b81]" strokeWidth={1.7} />
+              <Folder className="h-3.5 w-3.5 shrink-0 text-[#7b7b81] dark:text-muted-foreground" strokeWidth={1.7} />
             )}
             <span className="truncate">{folder.name}</span>
           </Button>

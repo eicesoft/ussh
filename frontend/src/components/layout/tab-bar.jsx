@@ -123,7 +123,7 @@ export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onClon
                       compactOverview && 'justify-center gap-0 overflow-hidden',
                       active
                         ? 'bg-background font-semibold text-foreground shadow-sm'
-                        : 'text-[#6f6f75] hover:bg-[#eeeeF0] hover:text-[#2d2d31] dark:text-muted-foreground dark:hover:bg-background/50 dark:hover:text-foreground',
+                        : 'text-[#6f6f75] hover:bg-[#eeeeF0] hover:text-[#2d2d31] dark:text-foreground/80 dark:hover:bg-background/50 dark:hover:text-foreground',
                     )}
                     style={{
                       minWidth: compactOverview

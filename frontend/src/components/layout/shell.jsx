@@ -40,6 +40,7 @@ export function Shell() {
     selectTab,
     switchWorkspace,
     createWorkspace,
+    deleteWorkspace,
     newTab,
     closeTab,
     setTabStatus,
@@ -68,6 +69,7 @@ export function Shell() {
   } = useSavedNodes();
   const [globalStatus, setGlobalStatus] = useState('准备就绪');
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [previewTerminalOpacity, setPreviewTerminalOpacity] = useState(null);
   const [showAboutDialog, setShowAboutDialog] = useState(false);
   const [showSavedLinkDialog, setShowSavedLinkDialog] = useState(false);
   const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
@@ -78,6 +80,7 @@ export function Shell() {
   const [editingNode, setEditingNode] = useState(null);
   const [editingCredential, setEditingCredential] = useState(null);
   const [deletingNode, setDeletingNode] = useState(null);
+  const [deletingWorkspace, setDeletingWorkspace] = useState(null);
   const [activeUtility, setActiveUtility] = useState(null);
   const [isWindowMaximised, setIsWindowMaximised] = useState(false);
   const [connectionTreeWidth, setConnectionTreeWidth] = useState(240);
@@ -97,15 +100,24 @@ export function Shell() {
     };
   }, []);
 
+  const openSettingsDialog = useCallback(() => {
+    setPreviewTerminalOpacity(null);
+    setShowSettingsDialog(true);
+  }, []);
+  const closeSettingsDialog = useCallback(() => {
+    setShowSettingsDialog(false);
+    setPreviewTerminalOpacity(null);
+  }, []);
+
   useEffect(() => {
     if (!runtimeAvailable) return undefined;
     const offAbout = onShowAbout(() => setShowAboutDialog(true));
-    const offSettings = onShowSettings(() => setShowSettingsDialog(true));
+    const offSettings = onShowSettings(openSettingsDialog);
     return () => {
       offAbout?.();
       offSettings?.();
     };
-  }, []);
+  }, [openSettingsDialog]);
 
   useEffect(() => {
     const savedLinks = new Map(nodes.filter(node => node.type === 'ssh').map(node => [node.id, node]));
@@ -403,11 +415,18 @@ export function Shell() {
         name: node.name,
         sourceNodeId: node.id,
         restorePending: false,
+        connectOnActivate: true,
         form,
       });
-      handleConnect(tab.id, form);
     });
   }, [closeTab, handleConnect, nodes, savedNodesLoaded, settings.restoreTabs, tabs, updateTab]);
+
+  useEffect(() => {
+    const tab = tabs.find(item => item.id === activeId);
+    if (!tab?.connectOnActivate || tab.status !== 'idle' || !tab.form) return;
+    updateTab(tab.id, { connectOnActivate: false });
+    handleConnect(tab.id, tab.form);
+  }, [activeId, handleConnect, tabs, updateTab]);
 
   const connectTemporary = useCallback(
     async payload => {
@@ -485,6 +504,17 @@ export function Shell() {
     }
   }, [setTabStatus, writeToTab]);
 
+  const submitDeleteWorkspace = useCallback(async () => {
+    if (!deletingWorkspace) return;
+    const target = deletingWorkspace;
+    setDeletingWorkspace(null);
+    const workspaceTabs = tabs.filter(tab => tab.workspaceId === target.id);
+    await Promise.all(workspaceTabs.map(tab => disconnectTab(tab)));
+    if (deleteWorkspace(target.id)) {
+      setGlobalStatus(`已删除工作区「${target.name}」`);
+    }
+  }, [deleteWorkspace, deletingWorkspace, disconnectTab, tabs]);
+
   const onActiveConnect = useCallback(
     payload => handleConnect(activeTab.id, payload),
     [activeTab.id, handleConnect],
@@ -514,7 +544,10 @@ export function Shell() {
   const terminalActive =
     activeTab.kind !== 'dashboard' &&
     (activeTab.status === 'connected' || activeTab.status === 'connecting' || activeTab.status === 'closed');
-  const terminalOpacity = (settings.terminal?.opacity ?? 100) / 100;
+  // 线性透明度在低值区间变化不明显：例如 30% 仍会把浅色亚克力压成整块灰色。
+  // 使用缓出曲线，让用户降低滑块时能更快看到统一背景，同时 100% 仍保持完全不透明。
+  const terminalOpacityPercent = previewTerminalOpacity ?? settings.terminal?.opacity ?? 100;
+  const terminalOpacity = Math.pow(terminalOpacityPercent / 100, 1.5);
   const activeConnectionCount = tabs.filter(
     tab => tab.kind !== 'dashboard' && (tab.status === 'connected' || tab.status === 'connecting'),
   ).length;
@@ -535,13 +568,15 @@ export function Shell() {
   return (
     <main
       className={cn(
-        'app-window flex h-screen flex-col overflow-hidden bg-background text-foreground',
+        'app-window flex h-screen flex-col overflow-hidden text-foreground',
         isWindowMaximised ? 'rounded-none' : 'rounded-[14px]',
-        // 启用窗口材质时保持主容器透明，让总览和其他标签下的界面区域都能透出亚克力背景。
-        settings.backdropType !== 'none' && 'bg-transparent',
       )}
       data-density={settings.density}
+      data-backdrop-type={settings.backdropType}
+      style={{ '--acrylic-opacity-scale': terminalOpacityPercent / 100 }}
     >
+      {/* 单一、连续的窗口背景层：所有面板共享这一次模糊采样，避免面板交界处的亚克力断层。 */}
+      <div className="app-background" aria-hidden="true" />
       <header
         className="app-drag acrylic-panel flex min-w-0 select-none"
         style={{ height: 'var(--density-tab-height)' }}
@@ -587,7 +622,7 @@ export function Shell() {
                   size="icon"
                   className="h-6 w-6"
                   ref={settingsButtonRef}
-                  onClick={() => setShowSettingsDialog(true)}
+                  onClick={openSettingsDialog}
                     aria-label="软件设置"
                   >
                     <Settings className="h-3.5 w-3.5" />
@@ -628,6 +663,7 @@ export function Shell() {
             activeWorkspaceId={activeWorkspaceId}
             onSwitchWorkspace={switchWorkspace}
             onAddWorkspace={() => setShowNewWorkspaceDialog(true)}
+            onDeleteWorkspace={workspace => setDeletingWorkspace(workspace)}
             nodes={nodes}
             onOpenSaved={connectSavedLink}
             onAddFolder={handleAddFolder}
@@ -645,6 +681,7 @@ export function Shell() {
           className={cn(
             'split-resizer',
             isConnectionTreeVisible ? 'w-px' : 'pointer-events-none w-0 opacity-0',
+            'split-resizer--hidden',
           )}
         />
         <Panel minSize={460}>
@@ -653,13 +690,13 @@ export function Shell() {
               <Panel minSize={320}>
                 <div
                   className={cn(
-                    'terminal-panel relative flex h-full min-h-0 overflow-auto bg-background p-5',
-                    terminalActive && 'overflow-hidden p-0',
-                    activeTab.kind === 'dashboard' && 'overflow-hidden p-0',
+                    'terminal-panel relative flex h-full min-h-0 overflow-auto bg-transparent p-5',
+                    terminalActive && 'mx-0.5 overflow-hidden rounded-lg p-0',
+                    activeTab.kind === 'dashboard' && 'overflow-hidden bg-transparent p-0',
                   )}
                   style={
                     terminalActive
-                      ? { backgroundColor: `rgba(11, 18, 32, ${terminalOpacity})` }
+                      ? { backgroundColor: `hsl(var(--terminal-surface) / ${terminalOpacity})` }
                       : undefined
                   }
                 >
@@ -707,7 +744,7 @@ export function Shell() {
               </Panel>
               {utilityPanelVisible && (
                 <>
-                  <Separator className="split-resizer" />
+                  <Separator className="split-resizer split-resizer--hidden" />
                   <Panel
                     defaultSize={360}
                     minSize={200}
@@ -734,9 +771,10 @@ export function Shell() {
       <SettingsDialog
         open={showSettingsDialog}
         anchorRef={settingsButtonRef}
-        onClose={() => setShowSettingsDialog(false)}
+        onClose={closeSettingsDialog}
         settings={settings}
         onSave={applySettings}
+        onTerminalOpacityPreview={setPreviewTerminalOpacity}
       />
 
       <AboutDialog
@@ -776,6 +814,13 @@ export function Shell() {
         node={deletingNode}
         onClose={() => setDeletingNode(null)}
         onConfirm={submitDelete}
+      />
+
+      <ConfirmDeleteDialog
+        open={deletingWorkspace !== null}
+        node={deletingWorkspace ? { ...deletingWorkspace, type: 'workspace' } : null}
+        onClose={() => setDeletingWorkspace(null)}
+        onConfirm={submitDeleteWorkspace}
       />
     </main>
   );

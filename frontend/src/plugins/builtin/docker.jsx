@@ -179,7 +179,7 @@ function ContainerDetail({ container, detail, stats, logs, onBack, onInspect, on
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col">
-      <div className="flex min-w-0 items-center gap-1 border-b border-border px-2 py-2">
+      <div className="flex min-w-0 items-center gap-1 px-2 py-2">
         <Button variant="ghost" size="sm" className="h-7 shrink-0 gap-1 px-2 text-[10px]" onClick={onBack}>
           <ArrowLeft className="h-3.5 w-3.5" />返回
         </Button>
@@ -188,7 +188,7 @@ function ContainerDetail({ container, detail, stats, logs, onBack, onInspect, on
           <div className="truncate font-mono text-[9px] text-muted-foreground">{containerId(container)}</div>
         </div>
       </div>
-      <div className="flex min-w-0 border-b border-border px-2">
+      <div className="flex min-w-0 px-2">
         {[
           ['detail', '详情', onInspect],
           ['stats', '资源', onStats],
@@ -213,7 +213,7 @@ function ContainerDetail({ container, detail, stats, logs, onBack, onInspect, on
           </div>
         )) : (
           <div className="flex min-h-0 flex-1 flex-col">
-            <div className="flex shrink-0 items-center justify-end gap-1 border-b border-border px-2 py-1.5">
+              <div className="flex shrink-0 items-center justify-end gap-1 px-2 py-1.5">
               <select className="h-7 rounded border border-border bg-muted/40 px-1.5 text-[10px]" value={logs?.tail || 200} onChange={e => onLogTailChange(Number(e.target.value))} aria-label="日志行数">
                 <option value="100">最近 100 行</option>
                 <option value="200">最近 200 行</option>
@@ -489,12 +489,12 @@ function DockerPlugin() {
 
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-col text-xs">
-      <div className="grid grid-cols-3 gap-1 border-b border-border p-2">
+      <div className="grid grid-cols-3 gap-1 p-2">
         <MiniStat label="容器" value={`${runningCount} / ${containers.length}`} tone="text-emerald-600 dark:text-emerald-400" />
         <MiniStat label="镜像" value={headerInfo.Images} />
         <MiniStat label="Docker" value={headerInfo.ServerVersion || '-'} />
       </div>
-      <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
+      <div className="flex items-center gap-1 px-2 py-1.5">
         <div className="flex min-w-0 flex-1 gap-0.5">
           {TABS.map(({ id, label, icon: Icon }) => (
             <button key={id} type="button" onClick={() => { setTab(id); if (id !== 'containers') closeContainer(); }} className={`flex items-center gap-1 rounded px-2 py-1.5 text-[10px] ${tab === id ? 'bg-accent font-medium text-accent-foreground' : 'text-muted-foreground hover:bg-accent/60'}`}>
@@ -515,7 +515,7 @@ function DockerPlugin() {
           />
           {repairMessage && <div className="mx-2 mt-2 break-words rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-[10px] leading-relaxed text-amber-700 dark:text-amber-300">{repairMessage}</div>}
           {tab === 'containers' && !selected && (
-            <div className="flex min-w-0 shrink-0 items-center gap-1 border-b border-border px-2 py-1.5">
+            <div className="flex min-w-0 shrink-0 items-center gap-1 px-2 py-1.5">
               <div className="shrink-0 text-[10px] text-muted-foreground">全部容器 · {filteredContainers.length}</div>
               <input
                 className="ml-auto h-7 w-24 shrink-0 rounded border border-border bg-muted/40 px-2 text-[10px] outline-none placeholder:text-muted-foreground/70 focus:border-primary"
@@ -592,7 +592,7 @@ function DockerPlugin() {
                     <div className="flex shrink-0 gap-0.5"><Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" title="启动项目" onClick={() => runComposeAction('up', project)}><Play className="h-3.5 w-3.5" /></Button><Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" title="重启项目" onClick={() => runComposeAction('restart', project)}><RotateCw className="h-3.5 w-3.5" /></Button><Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-destructive hover:text-destructive" title="停止并删除项目" onClick={() => runComposeAction('down', project)}><Trash2 className="h-3.5 w-3.5" /></Button></div>
                     <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 self-center" title={collapsed ? '展开容器列表' : '收起容器列表'} onClick={() => toggleProject(name)} aria-label={collapsed ? '展开容器列表' : '收起容器列表'} aria-expanded={!collapsed}><ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${collapsed ? '-rotate-90' : ''}`} /></Button>
                   </div>
-                  {!collapsed && members.length > 0 && <div className="mt-2 min-w-0 max-w-full space-y-1 overflow-hidden border-t border-border pt-1.5">{members.map(member => <div key={containerId(member)} className="flex min-w-0 max-w-full items-center gap-1.5 overflow-hidden text-[9px]"><span className={`h-1.5 w-1.5 shrink-0 rounded-full ${isRunning(member) ? 'bg-emerald-500' : 'bg-muted-foreground/50'}`} /><span className="min-w-0 flex-1 truncate">{containerName(member)}</span><span className="min-w-0 max-w-24 shrink truncate text-muted-foreground">{member.Status || member.State}</span><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" title="查看详情" onClick={() => { setTab('containers'); openContainer(member); }}><Info className="h-3 w-3" /></Button></div>)}</div>}
+                  {!collapsed && members.length > 0 && <div className="mt-2 min-w-0 max-w-full space-y-1 overflow-hidden pt-1.5">{members.map(member => <div key={containerId(member)} className="flex min-w-0 max-w-full items-center gap-1.5 overflow-hidden text-[9px]"><span className={`h-1.5 w-1.5 shrink-0 rounded-full ${isRunning(member) ? 'bg-emerald-500' : 'bg-muted-foreground/50'}`} /><span className="min-w-0 flex-1 truncate">{containerName(member)}</span><span className="min-w-0 max-w-24 shrink truncate text-muted-foreground">{member.Status || member.State}</span><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" title="查看详情" onClick={() => { setTab('containers'); openContainer(member); }}><Info className="h-3 w-3" /></Button></div>)}</div>}
                 </div>;
               })}
             </div>

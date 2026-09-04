@@ -1,4 +1,4 @@
-package main
+package backend
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 )
 
 func TestBuildApplicationMenuIncludesEditMenu(t *testing.T) {
-	applicationMenu := buildApplicationMenu(NewApp())
+	applicationMenu := BuildApplicationMenu(NewApp())
 
 	for _, item := range applicationMenu.Items {
 		if item.Role == menu.EditMenuRole {

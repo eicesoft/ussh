@@ -1,4 +1,4 @@
-package main
+package backend
 
 import (
 	"encoding/json"
@@ -56,7 +56,7 @@ func writeAppConfig(cfg appFileConfig) error {
 
 // loadGpuDisabled 读取 GPU 加速开关，供启动时配置 webview。
 // 文件缺失、解析失败或字段缺省时一律视为启用（返回 false）。
-func loadGpuDisabled() bool {
+func LoadGPUDisabled() bool {
 	cfg := readAppConfig()
 	if cfg.GpuAcceleration == nil {
 		return false
@@ -67,7 +67,7 @@ func loadGpuDisabled() bool {
 var backdropTypes = map[string]bool{"none": true, "mica": true, "acrylic": true}
 
 // loadBackdropType 读取背景材质；非法或缺省时默认使用亚克力。
-func loadBackdropType() string {
+func LoadBackdropType() string {
 	cfg := readAppConfig()
 	if backdropTypes[cfg.BackdropType] {
 		return cfg.BackdropType

@@ -40,7 +40,14 @@ const backdropOptions = [
 const fontSizeOptions = [12, 13, 14, 15, 16];
 const scrollbackOptions = [1000, 5000, 10000, 20000];
 
-export function SettingsDialog({ open, anchorRef, onClose, settings, onSave }) {
+export function SettingsDialog({
+  open,
+  anchorRef,
+  onClose,
+  settings,
+  onSave,
+  onTerminalOpacityPreview,
+}) {
   const [draft, setDraft] = useState(settings);
   const [animationOrigin, setAnimationOrigin] = useState({ x: 0, y: 0 });
   const [models, setModels] = useState([]);
@@ -82,6 +89,10 @@ export function SettingsDialog({ open, anchorRef, onClose, settings, onSave }) {
   };
   const updateTerminalDraft = (key, value) => {
     setDraft(current => ({ ...current, terminal: { ...current.terminal, [key]: value } }));
+  };
+  const updateTerminalOpacity = value => {
+    updateTerminalDraft('opacity', value);
+    onTerminalOpacityPreview?.(value);
   };
   const updateAIDraft = (key, value) => {
     setDraft(current => ({ ...current, ai: { ...current.ai, [key]: value } }));
@@ -147,7 +158,7 @@ export function SettingsDialog({ open, anchorRef, onClose, settings, onSave }) {
   return (
     <Dialog open={open} onOpenChange={next => !next && onClose()}>
       <DialogContent
-        className="settings-dialog-content max-h-[calc(100vh-3rem)] max-w-xl overflow-y-auto"
+        className="settings-dialog-content max-h-[calc(100vh-3rem)] max-w-xl select-none overflow-y-auto"
         overlayClassName="bg-black/20 backdrop-blur-[1px]"
         disableDefaultAnimation
         style={{
@@ -203,15 +214,15 @@ export function SettingsDialog({ open, anchorRef, onClose, settings, onSave }) {
                 aria-label="恢复打开的标签页"
               />
             </SettingRow>
-            <SettingRow label="终端透明度" description="降低不透明度可透出终端背后的桌面背景。">
+            <SettingRow label="整体透明度" description="实时调节整个窗口的亚克力透景，包括终端、侧栏、标签栏和状态栏。">
               <div className="flex items-center gap-2">
                 <Slider
                   value={draft.terminal.opacity}
                   min={10}
                   max={100}
                   step={5}
-                  onValueChange={([value]) => updateTerminalDraft('opacity', value)}
-                  aria-label="终端透明度"
+                  onValueChange={([value]) => updateTerminalOpacity(value)}
+                  aria-label="整体透明度"
                 />
                 <span className="w-9 text-right text-xs text-muted-foreground">{draft.terminal.opacity}%</span>
               </div>
@@ -219,7 +230,7 @@ export function SettingsDialog({ open, anchorRef, onClose, settings, onSave }) {
             <SettingRow label="GPU 硬件加速" description="使用显卡渲染界面，出现花屏或闪烁时可关闭，重启应用后生效。">
               <Switch checked={draft.gpuAcceleration} onCheckedChange={value => updateDraft('gpuAcceleration', value)} aria-label="GPU 硬件加速" />
             </SettingRow>
-            <SettingRow label="背景材质" description="半透明窗口背后的模糊质感；macOS 立即生效，Windows 需重启。">
+            <SettingRow label="整体背景材质" description="为整个窗口统一设置连续的背景模糊；macOS 立即生效，Windows 需重启。">
               <Select value={draft.backdropType} onValueChange={value => updateDraft('backdropType', value)}>
                 <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
                 <SelectContent>

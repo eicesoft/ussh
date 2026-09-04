@@ -11,7 +11,7 @@ function ConnectionCards({ links, onConnect }) {
       {links.map(link => (
         <div
           key={link.id}
-          className="group cursor-pointer rounded-md border border-border bg-card p-3 text-left shadow-sm transition-all hover:border-primary/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="group cursor-pointer rounded-md border border-foreground/10 bg-foreground/[0.055] p-3 text-left shadow-[0_1px_2px_hsl(var(--foreground)/0.05)] transition-all hover:border-primary/35 hover:bg-foreground/[0.085] hover:shadow-[0_4px_12px_hsl(var(--foreground)/0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onDoubleClick={() => onConnect(link)}
         >
           <div className="flex items-start gap-2">
@@ -48,7 +48,7 @@ function FolderSection({ folder, linksByParent, foldersByParent, getFolderConnec
   const children = (foldersByParent.get(folder.id) || []).filter(child => hasContent(child));
 
   return (
-    <section className={depth > 0 ? 'mt-4 border-l border-border pl-3' : undefined}>
+    <section className={depth > 0 ? 'mb-3 mt-4 pl-3' : undefined}>
       <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-foreground">
         <FolderOpen className="h-3.5 w-3.5 text-primary" />
         <h2>{folder.name}</h2>
@@ -115,7 +115,7 @@ export function ConnectionDashboard({ nodes, onConnect, onNewConnection }) {
   const rootFolders = (foldersByParent.get(0) || []).filter(folder => hasContent(folder));
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-1 flex-col select-none bg-background">
+    <div className="dashboard-acrylic flex h-full min-h-0 flex-col overflow-hidden rounded-xl select-none">
       <div className="w-full shrink-0 px-4 pt-4">
         <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-start gap-2.5">

@@ -1,4 +1,4 @@
-package main
+package backend
 
 import (
 	"strings"
@@ -175,14 +175,14 @@ func TestRunViaPTYNoConnection(t *testing.T) {
 // TestStripANSI 验证各类转义序列都被剥离。
 func TestStripANSI(t *testing.T) {
 	cases := map[string]string{
-		"\x1b[32mgreen\x1b[0m":                  "green",
-		"\x1b[1;31mbold red\x1b[0m":             "bold red",
-		"a\r\nb":                                "a\nb",
-		"line1\rline2":                          "line1\nline2",
-		"\x1b]0;title\x07prompt":                "prompt",
-		"\x1b(Bplain":                           "plain",
-		"\x1b[2J\x1b[Hclean":                    "clean",
-		"\x1b[K\x1b[?25ltext":                   "text",
+		"\x1b[32mgreen\x1b[0m":      "green",
+		"\x1b[1;31mbold red\x1b[0m": "bold red",
+		"a\r\nb":                    "a\nb",
+		"line1\rline2":              "line1\nline2",
+		"\x1b]0;title\x07prompt":    "prompt",
+		"\x1b(Bplain":               "plain",
+		"\x1b[2J\x1b[Hclean":        "clean",
+		"\x1b[K\x1b[?25ltext":       "text",
 	}
 	for input, want := range cases {
 		if got := stripANSI(input); got != want {

@@ -1,4 +1,4 @@
-package main
+package backend
 
 import (
 	"bufio"
@@ -149,16 +149,18 @@ func NewApp() *App {
 		agentApprovals: map[string]chan string{},
 	}
 }
+
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	// macOS 上背景材质由窗口内注入的 NSVisualEffectView 实现，窗口就绪后应用。
-	applyWindowMaterial(loadBackdropType())
+	applyWindowMaterial(LoadBackdropType())
 	if db, err := openStore(); err == nil {
 		a.db = db
 	} else {
 		fmt.Printf("无法打开本地连接库：%v\n", err)
 	}
 }
+
 func (a *App) shutdown(ctx context.Context) {
 	a.aiMu.Lock()
 	for requestID, cancel := range a.aiRequests {
@@ -181,6 +183,16 @@ func (a *App) shutdown(ctx context.Context) {
 	if a.db != nil {
 		_ = a.db.Close()
 	}
+}
+
+// Startup attaches the Wails runtime context and opens local persistence.
+func Startup(app *App, ctx context.Context) {
+	app.startup(ctx)
+}
+
+// Shutdown releases active SSH sessions and local persistence.
+func Shutdown(app *App, ctx context.Context) {
+	app.shutdown(ctx)
 }
 
 // Connect opens an interactive SSH shell under the given tabId.

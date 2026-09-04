@@ -14,7 +14,7 @@ export function WorkspaceList({ workspaces, activeId, onSelect, onAdd, onDelete 
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-5 w-5 rounded-md text-[#77777d] hover:bg-[#e6e6e9] hover:text-[#36363b]"
+                className="h-5 w-5 rounded-md text-[#77777d] hover:bg-foreground/10 hover:text-[#36363b] dark:text-muted-foreground dark:hover:text-foreground"
                 onClick={onAdd}
                 aria-label="新建工作区"
               >
@@ -34,8 +34,8 @@ export function WorkspaceList({ workspaces, activeId, onSelect, onAdd, onDelete 
               role="button"
               tabIndex={0}
               className={cn(
-                'app-no-drag group flex h-7 w-full min-w-0 items-center gap-2 rounded-[7px] px-2.5 text-[13px] font-normal text-[#2d2d31] transition-colors hover:bg-[#e8e8eb] dark:text-secondary-foreground dark:hover:bg-accent',
-                workspace.id === activeId && 'bg-[#dfdfe3] font-medium text-[#242429] dark:bg-accent dark:text-accent-foreground',
+                'app-no-drag group flex h-7 w-full min-w-0 items-center gap-2 rounded-[7px] px-2.5 text-[13px] font-normal text-[#2d2d31] transition-colors hover:bg-foreground/10 dark:text-secondary-foreground',
+                workspace.id === activeId && 'bg-foreground/[0.14] font-medium text-[#242429] dark:text-accent-foreground',
               )}
               onClick={() => onSelect(workspace.id)}
               onKeyDown={event => {
@@ -51,7 +51,7 @@ export function WorkspaceList({ workspaces, activeId, onSelect, onAdd, onDelete 
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-5 w-5 shrink-0 rounded-md text-[#88888d] opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-destructive/10 hover:text-destructive"
+                className="h-5 w-5 shrink-0 rounded-md text-[#88888d] opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-destructive/10 hover:text-destructive dark:text-muted-foreground dark:hover:text-destructive"
                 onClick={event => {
                   event.stopPropagation();
                   onDelete?.(workspace);

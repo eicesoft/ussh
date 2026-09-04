@@ -15,7 +15,7 @@
     --secondary: 215 25% 95%;
     --secondary-foreground: 215 25% 27%;
     --muted: 215 20% 96%;
-    --muted-foreground: 215 14% 46%;
+    --muted-foreground: 215 14% 42%;
     --accent: 215 25% 92%;
     --accent-foreground: 215 25% 18%;
     --destructive: 0 72% 51%;
@@ -26,6 +26,10 @@
     --splitter: 215 22% 87%;
     --splitter-hover: 158 72% 35%;
     --splitter-active: 158 72% 30%;
+    --terminal-surface: 218 23% 14%;
+    --acrylic-base-opacity: 0.16;
+    --acrylic-gradient-start-opacity: 0.2;
+    --acrylic-gradient-end-opacity: 0.32;
     --radius: 0.5rem;
     --density-tab-height: 30px;
     --density-tab-padding-x: 8px;
@@ -74,7 +78,8 @@
     --secondary: 222 20% 16%;
     --secondary-foreground: 210 20% 92%;
     --muted: 222 20% 16%;
-    --muted-foreground: 215 14% 65%;
+    /* 深色下次级文字需要压过半透明亚克力背景：65% 在浅色壁纸上会掉到 1:1 左右。 */
+    --muted-foreground: 215 16% 76%;
     --accent: 222 20% 20%;
     --accent-foreground: 210 20% 92%;
     --destructive: 0 62% 45%;
@@ -85,17 +90,27 @@
     --splitter: 222 20% 30%;
     --splitter-hover: 158 64% 55%;
     --splitter-active: 158 64% 62%;
+    --terminal-surface: 222 30% 7%;
+    --acrylic-base-opacity: 0.62;
+    --acrylic-gradient-start-opacity: 0.68;
+    --acrylic-gradient-end-opacity: 0.78;
   }
 }
 
 @layer components {
-  /* 顶部与左右工具面板共享的亚克力材质：约 70% 透出窗口背景。 */
+  /*
+   * 内容面板不再各自模糊背景。全窗口只在 .app-background 上采样一次，
+   * 这样渐变与桌面透景可自然穿过标题栏、侧栏、主区和状态栏。
+   */
   .acrylic-panel {
-    --acrylic-opacity: 0.3;
     color: hsl(var(--foreground));
-    background: hsl(var(--background) / var(--acrylic-opacity));
-    -webkit-backdrop-filter: blur(24px) saturate(120%);
-    backdrop-filter: blur(24px) saturate(120%);
+    background: transparent;
+  }
+
+  /* 总览沿用全局背景，不再建立独立的磨砂采样层。 */
+  .dashboard-acrylic {
+    color: hsl(var(--foreground));
+    background: transparent;
   }
 
   /* Radix ScrollArea uses a table-like content wrapper for intrinsic sizing.
@@ -191,6 +206,16 @@
     transition: background-color 150ms ease;
   }
 
+  /* 主内容区默认不占用分隔线像素；悬停与拖拽时由伪元素绘制反馈线。 */
+  .split-resizer--hidden {
+    width: 0 !important;
+    background-color: transparent !important;
+  }
+
+  .split-resizer.split-resizer--hidden::after {
+    inset: 0 -0.5px;
+  }
+
   /* 保持分隔线纤细，同时扩大可拖拽的鼠标命中区域。 */
   .split-resizer::before {
     position: absolute;
@@ -223,6 +248,7 @@
     background-color: hsl(var(--splitter-active));
     box-shadow: 0 0 3px hsl(var(--splitter-active) / 0.9);
   }
+
 }
 
 @layer base {
@@ -274,11 +300,89 @@
 
 /* 最大化时取消圆角；窗口状态切换时保留连续的边缘过渡。 */
 .app-window {
+  position: relative;
+  isolation: isolate;
   transition: border-radius 180ms ease-out;
 }
 
+.app-window > :not(.app-background) {
+  position: relative;
+  z-index: 1;
+}
+
+/*
+ * 应用唯一的背景材质层。它覆盖完整窗口而不是每一个业务区域，
+ * 因此 backdrop-filter 的取样坐标在整个界面内保持一致。
+ */
+.app-background {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background: hsl(var(--background));
+  pointer-events: none;
+  transition: background-color 180ms ease, -webkit-backdrop-filter 180ms ease, backdrop-filter 180ms ease;
+}
+
+.app-window[data-backdrop-type='mica'] .app-background {
+  background:
+    linear-gradient(135deg, hsl(var(--background) / 0.78), hsl(var(--background) / 0.9)),
+    hsl(var(--background) / 0.78);
+  -webkit-backdrop-filter: blur(18px) saturate(112%);
+  backdrop-filter: blur(18px) saturate(112%);
+}
+
+/*
+ * 终端透明度滑块只应该让终端变透，而不是把整扇窗口（含侧栏、标签栏）一起洗白。
+ * 所以这里不直接乘滑块值，而是把滑块映射到 0.55~1 的染色系数：
+ * 滑块拉到最低时窗口仍有足够底色托住文字，拉满时保持完全不透明。
+ */
+.app-window[data-backdrop-type='acrylic'] .app-background {
+  --acrylic-tint-scale: calc(
+    var(--acrylic-min-tint-scale, 0.55) +
+    (1 - var(--acrylic-min-tint-scale, 0.55)) * var(--acrylic-opacity-scale, 1)
+  );
+  background:
+    radial-gradient(
+      90% 75% at -10% -15%,
+      hsl(var(--primary) / calc(0.16 * var(--acrylic-opacity-scale, 1))),
+      transparent 62%
+    ),
+    radial-gradient(
+      85% 70% at 108% 118%,
+      hsl(213 72% 64% / calc(0.12 * var(--acrylic-opacity-scale, 1))),
+      transparent 64%
+    ),
+    linear-gradient(
+      135deg,
+      hsl(
+        var(--background) /
+        calc(var(--acrylic-gradient-start-opacity) * var(--acrylic-tint-scale))
+      ),
+      hsl(
+        var(--background) /
+        calc(var(--acrylic-gradient-end-opacity) * var(--acrylic-tint-scale))
+      )
+    ),
+    hsl(
+      var(--background) /
+      calc(var(--acrylic-base-opacity) * var(--acrylic-tint-scale))
+    );
+  -webkit-backdrop-filter: blur(28px) saturate(135%);
+  backdrop-filter: blur(28px) saturate(135%);
+}
+
+/*
+ * 终端的透明度只负责控制深色染色层，磨砂必须由终端表面自己完成。
+ * 否则滑块调低时只会得到一块更浅的纯色，而不会产生玻璃的景深感。
+ */
+.app-window[data-backdrop-type='acrylic'] .terminal-panel {
+  -webkit-backdrop-filter: blur(24px) saturate(145%);
+  backdrop-filter: blur(24px) saturate(145%);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .app-window {
+  .app-window,
+  .app-background {
     transition: none;
   }
 }
@@ -311,4 +415,17 @@
 
 .settings-dialog-content[data-state='closed'] {
   animation: settings-dialog-close 180ms cubic-bezier(0.4, 0, 1, 1);
+}
+
+/* 设置项说明仅用于阅读，避免拖动滑块或操作控件时误选中文字。 */
+.settings-dialog-content,
+.settings-dialog-content *:not(input):not(textarea) {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.settings-dialog-content input,
+.settings-dialog-content textarea {
+  -webkit-user-select: text;
+  user-select: text;
 }

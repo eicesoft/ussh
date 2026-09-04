@@ -163,7 +163,11 @@ function FolderNode({
         <button
           type="button"
           className="flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left"
-          onClick={() => onSelect(folder.id)}
+          onClick={() => {
+            onSelect(folder.id);
+            onToggle(folder.id);
+          }}
+          aria-expanded={isOpen}
           title={folder.name}
         >
           {isOpen ? <FolderOpen className="h-3.5 w-3.5 shrink-0 text-amber-500" /> : <Folder className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
@@ -239,7 +243,6 @@ function QuickCommands() {
 
   const connected = activeTab?.status === 'connected';
   const folderMap = useMemo(() => new Map(store.folders.map(folder => [folder.id, folder])), [store.folders]);
-  const selectedFolder = selectedFolderId ? folderMap.get(selectedFolderId) : null;
   const rootCommands = store.commands.filter(command => command.folderId === null);
   const rootFolders = store.folders.filter(folder => folder.parentId === null);
 
@@ -346,35 +349,8 @@ function QuickCommands() {
     sendInput(activeTab.id, `${content.replace(/\r?\n/g, '\r')}\r`);
   };
 
-  const selectedPath = [];
-  let cursor = selectedFolder;
-  const visitedFolders = new Set();
-  while (cursor && !visitedFolders.has(cursor.id)) {
-    visitedFolders.add(cursor.id);
-    selectedPath.unshift(cursor.name);
-    cursor = folderMap.get(cursor.parentId);
-  }
-
   return (
     <div className="flex h-full min-h-0 flex-col bg-background/20">
-      <div className="shrink-0 px-3 pb-2.5 pt-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <ListTree className="h-4 w-4 text-primary" />
-              <span className="text-xs font-semibold">命令工作区</span>
-              <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-medium text-primary">{store.commands.length} 条</span>
-            </div>
-            <p className="mt-1 truncate text-[10px] text-muted-foreground">
-              {selectedPath.length ? selectedPath.join(' / ') : '根目录'}
-            </p>
-          </div>
-          <span className={cn('mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[9px]', connected ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground')}>
-            {connected ? '已连接' : '未连接'}
-          </span>
-        </div>
-      </div>
-
       <ScrollArea className="quick-commands-scroll min-h-0 flex-1">
         <div className="space-y-3 p-2.5">
           <section>

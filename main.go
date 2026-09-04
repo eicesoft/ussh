@@ -1,7 +1,10 @@
 package main
 
 import (
+	"context"
 	"embed"
+
+	"ussh/internal/backend"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -11,19 +14,33 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
 )
 
+// App is the Wails-facing adapter. The backend implementation remains internal
+// while this thin type preserves the stable main.App binding consumed by the UI.
+type App struct {
+	*backend.App
+}
+
+func (a *App) startup(ctx context.Context) {
+	backend.Startup(a.App, ctx)
+}
+
+func (a *App) shutdown(ctx context.Context) {
+	backend.Shutdown(a.App, ctx)
+}
+
 //go:embed all:frontend/dist
 var assets embed.FS
 
 func main() {
-	app := NewApp()
+	app := &App{App: backend.NewApp()}
 	// GPU 加速开关仅在创建窗口时生效：Windows 走 --disable-gpu，Linux 走 WebkitGpuPolicy，macOS 由系统管理。
-	gpuDisabled := loadGpuDisabled()
+	gpuDisabled := backend.LoadGPUDisabled()
 	gpuPolicy := linux.WebviewGpuPolicyOnDemand
 	if gpuDisabled {
 		gpuPolicy = linux.WebviewGpuPolicyNever
 	}
 	// 背景材质（云母/亚克力）需要窗口半透明：Windows 11 22621+ 使用系统 Backdrop，macOS 由 cgo 注入。
-	backdrop := loadBackdropType()
+	backdrop := backend.LoadBackdropType()
 	backdropType := windows.Auto
 	switch backdrop {
 	case "mica":
@@ -41,7 +58,7 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		Menu: buildApplicationMenu(app),
+		Menu: backend.BuildApplicationMenu(app.App),
 		// 让前端的圆角外侧透出桌面背景，而不是由原生窗口填充颜色。
 		BackgroundColour: &options.RGBA{R: 0, G: 0, B: 0, A: 0},
 		Mac: &mac.Options{
@@ -55,8 +72,8 @@ func main() {
 		Linux: &linux.Options{
 			WebviewGpuPolicy: gpuPolicy,
 		},
-		OnStartup:        app.startup,
-		OnShutdown:       app.shutdown,
+		OnStartup:  app.startup,
+		OnShutdown: app.shutdown,
 		Bind: []interface{}{
 			app,
 		},

@@ -1,4 +1,4 @@
-package main
+package backend
 
 import (
 	"github.com/wailsapp/wails/v2/pkg/menu"
@@ -6,7 +6,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-func buildApplicationMenu(app *App) *menu.Menu {
+func BuildApplicationMenu(app *App) *menu.Menu {
 	applicationMenu := menu.NewMenu()
 	softwareMenu := applicationMenu.AddSubmenu("uSSH")
 	softwareMenu.AddText("关于 uSSH", nil, func(_ *menu.CallbackData) {

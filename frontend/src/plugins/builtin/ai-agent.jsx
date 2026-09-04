@@ -188,7 +188,7 @@ function ServerInfoCard({ tab }) {
 
   return (
     <div className="overflow-hidden rounded-lg border border-border/70 bg-secondary/25">
-      <div className="flex items-center gap-1.5 border-b border-border/60 px-2.5 py-2">
+      <div className="flex items-center gap-1.5 px-2.5 py-2">
         <Server className="h-3.5 w-3.5 text-primary" />
         <span className="text-[10px] font-semibold">服务器信息</span>
         <span className="ml-auto text-[9px] text-muted-foreground">会话初始化</span>
@@ -305,7 +305,7 @@ function RunBar({ step, onCopy }) {
       </button>
 
       {expanded && (
-        <div className="w-full min-w-0 max-w-full space-y-1.5 border-t border-border/60 px-2 py-1.5">
+        <div className="w-full min-w-0 max-w-full space-y-1.5 px-2 py-1.5">
           <div className="flex items-start justify-between gap-2">
             <span className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">执行的命令</span>
             <button
@@ -365,7 +365,7 @@ function DoneBar({ step, onExecute, canExecute }) {
   const summary = normalizeRunOutput(step.summary || '');
   return (
     <div className="block w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-primary/25 bg-primary/5">
-      <div className="flex min-w-0 items-center gap-1.5 border-b border-primary/20 px-2 py-1">
+      <div className="flex min-w-0 items-center gap-1.5 px-2 py-1">
         <Sparkles className="h-3 w-3 text-primary" />
         <span className="text-[9px] font-bold uppercase tracking-wider text-primary">Done</span>
         <span className="text-[9px] text-muted-foreground">任务完成</span>

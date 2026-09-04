@@ -243,6 +243,33 @@ export function useTabs({ restoreTabs = true } = {}) {
     return created.workspace;
   }, []);
 
+  const deleteWorkspace = useCallback(id => {
+    if (workspaces.length <= 1) return false;
+    const targetIndex = workspaces.findIndex(workspace => workspace.id === id);
+    if (targetIndex < 0) return false;
+
+    const remainingWorkspaces = workspaces.filter(workspace => workspace.id !== id);
+    const removedTabs = tabs.filter(tab => tab.workspaceId === id);
+    const remainingTabs = tabs.filter(tab => tab.workspaceId !== id);
+    removedTabs.forEach(tab => {
+      delete buffersRef.current[tab.id];
+      delete termsRef.current[tab.id];
+    });
+
+    if (id === activeWorkspaceId) {
+      const nextWorkspace = remainingWorkspaces[Math.min(targetIndex, remainingWorkspaces.length - 1)];
+      const nextTab = remainingTabs.find(tab => tab.id === nextWorkspace.activeTabId && tab.workspaceId === nextWorkspace.id)
+        || remainingTabs.find(tab => tab.workspaceId === nextWorkspace.id && tab.kind === 'dashboard')
+        || remainingTabs.find(tab => tab.workspaceId === nextWorkspace.id);
+      setActiveWorkspaceId(nextWorkspace.id);
+      setActiveId(nextTab?.id);
+    }
+
+    setWorkspaces(remainingWorkspaces);
+    setTabs(remainingTabs);
+    return true;
+  }, [activeWorkspaceId, tabs, workspaces]);
+
   const newTab = useCallback(() => {
     const id = newTabId();
     const tab = {
@@ -338,6 +365,7 @@ export function useTabs({ restoreTabs = true } = {}) {
     selectTab,
     switchWorkspace,
     createWorkspace,
+    deleteWorkspace,
     newTab,
     closeTab,
     setTabStatus,

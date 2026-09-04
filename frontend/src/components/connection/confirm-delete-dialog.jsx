@@ -19,9 +19,13 @@ export function ConfirmDeleteDialog({ open, node, onClose, onConfirm }) {
     >
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{node?.type === 'folder' ? '删除文件夹？' : '删除连接？'}</AlertDialogTitle>
+          <AlertDialogTitle>
+            {node?.type === 'workspace' ? '删除工作区？' : node?.type === 'folder' ? '删除文件夹？' : '删除连接？'}
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            {node?.type === 'folder'
+            {node?.type === 'workspace'
+              ? `将删除工作区「${node?.name}」及其中保存的连接标签页。此操作不可撤销。`
+              : node?.type === 'folder'
               ? `将删除文件夹「${node?.name}」，其中的连接会移到根目录。此操作不可撤销。`
               : `将删除「${node?.name}」的元数据以及系统密钥环中保存的密码或私钥。此操作不可撤销。`}
           </AlertDialogDescription>

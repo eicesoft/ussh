@@ -126,7 +126,7 @@ function UploadProgressPanel({ task, onClose }) {
         : '上传失败';
 
   return (
-    <div className="shrink-0 border-t border-border bg-background/80 px-3 py-2 text-[10px]">
+    <div className="shrink-0 bg-background/80 px-3 py-2 text-[10px]">
       <div className="mb-1 flex items-center justify-between gap-2">
         <div className="min-w-0 truncate font-medium">上传进度 · {statusLabel}</div>
         <Button
@@ -249,7 +249,7 @@ function ContextMenu({ items, pos, onClose }) {
 }
 
 function FileBrowser() {
-  const { activeTab, api } = usePluginContext();
+  const { activeTab, api, setHeaderActions } = usePluginContext();
   const [cwd, setCwd] = useState('/');
   const [pathInput, setPathInput] = useState('/');
   const [entries, setEntries] = useState([]);
@@ -326,6 +326,37 @@ function FileBrowser() {
   };
 
   const refresh = () => loadDir(cwd);
+
+  useEffect(() => {
+    if (!setHeaderActions || !connected) return undefined;
+
+    setHeaderActions(
+      <div className="flex items-center gap-0.5" aria-label="文件操作">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          title="上传文件"
+        >
+          <FileUp className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onClick={() => folderInputRef.current?.click()}
+          disabled={uploading}
+          title="上传文件夹"
+        >
+          <FolderUp className="h-3.5 w-3.5" />
+        </Button>
+      </div>,
+    );
+
+    return () => setHeaderActions(null);
+  }, [connected, cwd, fileInputRef, loading, navigateTo, setHeaderActions, uploading]);
 
   const chooseConflictAction = useCallback((action) => {
     conflictResolverRef.current?.(action);
@@ -550,50 +581,32 @@ function FileBrowser() {
     <TooltipProvider delayDuration={500}>
       <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden select-none">
       {/* 工具栏 */}
-      <div className="shrink-0 border-b border-border px-1 py-1">
-        <Input
-          value={pathInput}
-          onChange={event => setPathInput(event.target.value)}
-          onKeyDown={event => {
-            if (event.key !== 'Enter' || loading) return;
-            event.preventDefault();
-            navigateTo(event.currentTarget.value);
-          }}
-          disabled={uploading}
-          aria-label="远程路径"
-          placeholder="输入远程路径并按回车跳转"
-          className="h-7 w-full border-0 bg-transparent px-1 font-mono text-[11px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-        />
-        <div className="mt-1 flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={goUp} title="上级目录">
+      <div className="shrink-0 px-1 py-1">
+        <div className="flex items-center gap-1">
+          <Input
+            value={pathInput}
+            onChange={event => setPathInput(event.target.value)}
+            onKeyDown={event => {
+              if (event.key !== 'Enter' || loading) return;
+              event.preventDefault();
+              navigateTo(event.currentTarget.value);
+            }}
+            disabled={uploading}
+            aria-label="远程路径"
+            placeholder="输入远程路径并按回车跳转"
+            className="h-7 min-w-0 flex-1 rounded-none border border-border/60 bg-muted/55 px-2 font-mono text-[11px] text-foreground/65 shadow-none placeholder:text-foreground/35 focus-visible:ring-1 focus-visible:ring-ring/30 focus-visible:ring-offset-0"
+          />
+          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={goUp} title="上级目录">
             <ArrowLeft className="h-3.5 w-3.5" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigateTo('/')} title="根目录">
+          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => navigateTo('/')} title="根目录">
             <Home className="h-3.5 w-3.5" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={refresh} disabled={loading} title="刷新">
+          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={refresh} disabled={loading} title="刷新">
             <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            title="上传文件"
-          >
-            <FileUp className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => folderInputRef.current?.click()}
-            disabled={uploading}
-            title="上传文件夹"
-          >
-            <FolderUp className="h-3.5 w-3.5" />
-          </Button>
+        </div>
+        <div className="mt-1">
           <input
             ref={fileInputRef}
             type="file"
@@ -614,7 +627,7 @@ function FileBrowser() {
 
       {/* 表头 */}
       <div
-        className="grid min-w-0 shrink-0 items-center gap-2 border-b border-border px-2 py-1 text-[10px] font-medium text-muted-foreground"
+        className="grid min-w-0 shrink-0 items-center gap-2 px-2 py-1 text-[10px] font-medium text-muted-foreground"
         style={{ gridTemplateColumns: COLUMNS.map(c => c.width).join(' ') }}
       >
         {COLUMNS.map(col => (
@@ -626,6 +639,9 @@ function FileBrowser() {
       <div
         className="sftp-file-list min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto"
         onContextMenu={e => handleContextMenu(e, null)}
+        onDoubleClick={e => {
+          if (e.target === e.currentTarget) goUp();
+        }}
       >
         {error && (
           <div className="px-3 py-2 text-xs text-red-500">{error}</div>
@@ -646,7 +662,6 @@ function FileBrowser() {
                   style={{ gridTemplateColumns: COLUMNS.map(c => c.width).join(' ') }}
                   onClick={() => {
                     setSelected(entry.path);
-                    if (entry.isDir) navigateTo(entry.path);
                   }}
                   onDoubleClick={() => {
                     if (entry.isDir) navigateTo(entry.path);
@@ -678,14 +693,11 @@ function FileBrowser() {
       </div>
 
       {uploadPanelOpen && (
-        <UploadProgressPanel
-          task={uploadTask}
-          onClose={() => setUploadPanelOpen(false)}
-        />
+        <UploadProgressPanel task={uploadTask} onClose={() => setUploadPanelOpen(false)} />
       )}
 
       {/* 底部状态栏 */}
-      <div className="shrink-0 border-t border-border px-3 py-1 text-[10px] text-muted-foreground">
+      <div className="shrink-0 px-3 py-1 text-[10px] text-muted-foreground">
         {entries.length} 个项目
         {toast && <span className="ml-2">{toast}</span>}
         {uploadTask && !uploadPanelOpen && (

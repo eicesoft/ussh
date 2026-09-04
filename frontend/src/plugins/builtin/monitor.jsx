@@ -358,7 +358,7 @@ function NetworkSection({ network }) {
         <Metric label="发送速率" value={formatBytes(network.txRate, true)} hint={`累计 ${formatBytes(network.txBytes)}`} icon={ArrowUp} tone="text-blue-500" />
       </div>
       {network.interfaces.length > 0 && (
-        <div className="mt-2 border-t border-border pt-1.5">
+        <div className="mt-2 pt-1.5">
           {visibleInterfaces.map(item => (
             <div key={item.name} className="flex items-center justify-between gap-2 py-0.5 text-[9px]">
               <span className="truncate font-mono">{item.name}</span>
@@ -368,7 +368,7 @@ function NetworkSection({ network }) {
           {network.interfaces.length > 8 && (
             <button
               type="button"
-              className="mt-1.5 flex w-full items-center justify-center gap-1 border-t border-border pt-1.5 text-[9px] text-muted-foreground hover:text-foreground"
+              className="mt-1.5 flex w-full items-center justify-center gap-1 pt-1.5 text-[9px] text-muted-foreground hover:text-foreground"
               onClick={() => setExpanded(value => !value)}
               aria-expanded={expanded}
               aria-label={expanded ? '收起网络接口' : '展开全部网络接口'}
@@ -471,7 +471,7 @@ function ProcessSection({ processes, loading, error, actionMessage, actionLoadin
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-border px-2 py-1.5">
+      <div className="flex shrink-0 flex-wrap items-center gap-1.5 px-2 py-1.5">
         <label className="flex h-7 min-w-[120px] flex-1 items-center gap-1 rounded border border-border bg-muted/30 px-1.5 text-muted-foreground sm:max-w-[240px]">
           <Search className="h-3 w-3 shrink-0" />
           <input
@@ -556,7 +556,7 @@ function ProcessSection({ processes, loading, error, actionMessage, actionLoadin
 function PortSection({ ports, loading, error }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center gap-1 border-b border-border px-2 py-1">
+      <div className="flex shrink-0 items-center gap-1 px-2 py-1">
         <span className="rounded bg-primary px-2 py-1 text-[10px] text-primary-foreground">TCP ({ports.length})</span>
         {loading && <span className="ml-auto text-[9px] text-muted-foreground">正在扫描…</span>}
       </div>
@@ -773,8 +773,8 @@ function MonitorPlugin() {
   }
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col">
-      <div className="flex shrink-0 items-center gap-1 border-b border-border px-2 py-1.5">
+      <div className="flex h-full min-h-0 min-w-0 flex-col">
+      <div className="flex shrink-0 items-center gap-1 px-2 py-1.5">
         {[
           ['performance', '性能', Activity],
           ['ports', '网络端口', Network],

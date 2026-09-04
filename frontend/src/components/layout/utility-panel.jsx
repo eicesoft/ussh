@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { History, MessageSquarePlus, RefreshCw, X } from 'lucide-react';
+import { FolderPlus, History, MessageSquarePlus, Plus, RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getPlugin } from '@/plugins/registry';
-import { usePluginContext } from '@/plugins/context';
+import { PluginContext, usePluginContext } from '@/plugins/context';
 import { readAgentHistories } from '@/plugins/builtin/ai-agent-session';
 
 function getBrowserStorage() {
@@ -61,7 +61,7 @@ function AgentHistoryMenu({ tabId }) {
       </Button>
       {open && (
         <div className="absolute right-0 top-8 z-50 w-64 overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-lg">
-          <div className="border-b border-border px-3 py-2 text-[10px] font-semibold">历史会话</div>
+          <div className="px-3 py-2 text-[10px] font-semibold">历史会话</div>
           {history.length > 0 ? (
             <div className="max-h-72 overflow-y-auto p-1">
               {history.map(item => (
@@ -90,16 +90,19 @@ function AgentHistoryMenu({ tabId }) {
 }
 
 export function UtilityPanel({ active, onToggle }) {
-  const { activeTab } = usePluginContext();
+  const pluginContext = usePluginContext();
+  const { activeTab } = pluginContext;
+  const [headerActions, setHeaderActions] = useState(null);
   if (!active) return null;
   const plugin = getPlugin(active);
   if (!plugin) return null;
 
   const { title, component: Comp } = plugin;
+  const contextValue = { ...pluginContext, setHeaderActions };
 
   return (
     <aside className="acrylic-panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-      <div className="flex h-9 shrink-0 items-center justify-between border-b border-border px-3 text-xs font-semibold">
+      <div className="flex h-9 shrink-0 items-center justify-between px-3 text-xs font-semibold">
         <span>{title}</span>
         <div className="flex items-center gap-0.5">
           {active === 'ai-agent' && (
@@ -129,17 +132,44 @@ export function UtilityPanel({ active, onToggle }) {
               <RefreshCw className="h-3.5 w-3.5" />
             </Button>
           )}
+          {active === 'commands' && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => window.dispatchEvent(new Event('quick-commands-new-folder'))}
+                aria-label="新建目录"
+                title="新建目录"
+              >
+                <FolderPlus className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => window.dispatchEvent(new Event('quick-commands-new-command'))}
+                aria-label="新建命令"
+                title="新建命令"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+            </>
+          )}
+          {headerActions}
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onToggle(null)} aria-label="关闭面板">
             <X className="h-4 w-4" />
           </Button>
         </div>
       </div>
       <div className="min-h-0 min-w-0 flex-1">
-        {Comp ? <Comp /> : (
-          <div className="px-3 py-3 text-xs leading-relaxed text-muted-foreground">
-            暂无内容
-          </div>
-        )}
+        <PluginContext.Provider value={contextValue}>
+          {Comp ? <Comp /> : (
+            <div className="px-3 py-3 text-xs leading-relaxed text-muted-foreground">
+              暂无内容
+            </div>
+          )}
+        </PluginContext.Provider>
       </div>
     </aside>
   );

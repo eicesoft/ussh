@@ -40,6 +40,7 @@ export function Shell() {
     selectTab,
     switchWorkspace,
     createWorkspace,
+    deleteWorkspace,
     newTab,
     closeTab,
     setTabStatus,
@@ -78,6 +79,7 @@ export function Shell() {
   const [editingNode, setEditingNode] = useState(null);
   const [editingCredential, setEditingCredential] = useState(null);
   const [deletingNode, setDeletingNode] = useState(null);
+  const [deletingWorkspace, setDeletingWorkspace] = useState(null);
   const [activeUtility, setActiveUtility] = useState(null);
   const [isWindowMaximised, setIsWindowMaximised] = useState(false);
   const [connectionTreeWidth, setConnectionTreeWidth] = useState(240);
@@ -403,11 +405,18 @@ export function Shell() {
         name: node.name,
         sourceNodeId: node.id,
         restorePending: false,
+        connectOnActivate: true,
         form,
       });
-      handleConnect(tab.id, form);
     });
   }, [closeTab, handleConnect, nodes, savedNodesLoaded, settings.restoreTabs, tabs, updateTab]);
+
+  useEffect(() => {
+    const tab = tabs.find(item => item.id === activeId);
+    if (!tab?.connectOnActivate || tab.status !== 'idle' || !tab.form) return;
+    updateTab(tab.id, { connectOnActivate: false });
+    handleConnect(tab.id, tab.form);
+  }, [activeId, handleConnect, tabs, updateTab]);
 
   const connectTemporary = useCallback(
     async payload => {
@@ -484,6 +493,17 @@ export function Shell() {
       setGlobalStatus('已断开连接');
     }
   }, [setTabStatus, writeToTab]);
+
+  const submitDeleteWorkspace = useCallback(async () => {
+    if (!deletingWorkspace) return;
+    const target = deletingWorkspace;
+    setDeletingWorkspace(null);
+    const workspaceTabs = tabs.filter(tab => tab.workspaceId === target.id);
+    await Promise.all(workspaceTabs.map(tab => disconnectTab(tab)));
+    if (deleteWorkspace(target.id)) {
+      setGlobalStatus(`已删除工作区「${target.name}」`);
+    }
+  }, [deleteWorkspace, deletingWorkspace, disconnectTab, tabs]);
 
   const onActiveConnect = useCallback(
     payload => handleConnect(activeTab.id, payload),
@@ -628,6 +648,7 @@ export function Shell() {
             activeWorkspaceId={activeWorkspaceId}
             onSwitchWorkspace={switchWorkspace}
             onAddWorkspace={() => setShowNewWorkspaceDialog(true)}
+            onDeleteWorkspace={workspace => setDeletingWorkspace(workspace)}
             nodes={nodes}
             onOpenSaved={connectSavedLink}
             onAddFolder={handleAddFolder}
@@ -776,6 +797,13 @@ export function Shell() {
         node={deletingNode}
         onClose={() => setDeletingNode(null)}
         onConfirm={submitDelete}
+      />
+
+      <ConfirmDeleteDialog
+        open={deletingWorkspace !== null}
+        node={deletingWorkspace ? { ...deletingWorkspace, type: 'workspace' } : null}
+        onClose={() => setDeletingWorkspace(null)}
+        onConfirm={submitDeleteWorkspace}
       />
     </main>
   );

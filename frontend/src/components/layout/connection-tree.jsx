@@ -14,6 +14,7 @@ export function ConnectionTree({
   activeWorkspaceId,
   onSwitchWorkspace,
   onAddWorkspace,
+  onDeleteWorkspace,
   nodes,
   onOpenSaved,
   onAddFolder,
@@ -143,6 +144,7 @@ export function ConnectionTree({
             activeId={activeWorkspaceId}
             onSelect={onSwitchWorkspace}
             onAdd={onAddWorkspace}
+            onDelete={onDeleteWorkspace}
           />
 
           <div className="mb-1 mt-5 flex items-center justify-between px-1.5">

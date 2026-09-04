@@ -667,6 +667,11 @@ export function Shell() {
             'split-resizer',
             isConnectionTreeVisible ? 'w-px' : 'pointer-events-none w-0 opacity-0',
           )}
+          style={
+            terminalActive
+              ? { backgroundColor: 'transparent' }
+              : undefined
+          }
         />
         <Panel minSize={460}>
           <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
@@ -677,6 +682,9 @@ export function Shell() {
                     'terminal-panel relative flex h-full min-h-0 overflow-auto bg-background p-5',
                     terminalActive && 'overflow-hidden p-0',
                     activeTab.kind === 'dashboard' && 'overflow-hidden p-0',
+                    // 总览和终端共享内容画布；在未最大化窗口中将它们裁剪为圆角，
+                    // 让背景材质从边角露出，而不是仅给外层窗口设置圆角。
+                    !isWindowMaximised && (terminalActive || activeTab.kind === 'dashboard') && 'rounded-lg',
                   )}
                   style={
                     terminalActive

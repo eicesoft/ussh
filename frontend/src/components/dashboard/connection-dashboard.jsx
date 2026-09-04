@@ -115,7 +115,7 @@ export function ConnectionDashboard({ nodes, onConnect, onNewConnection }) {
   const rootFolders = (foldersByParent.get(0) || []).filter(folder => hasContent(folder));
 
   return (
-    <div className="flex h-full min-h-0 flex-col select-none bg-background">
+    <div className="flex h-full min-h-0 w-full flex-1 flex-col select-none bg-background">
       <div className="w-full shrink-0 px-4 pt-4">
         <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-start gap-2.5">

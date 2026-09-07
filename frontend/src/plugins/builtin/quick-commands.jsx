@@ -25,7 +25,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 
 const STORAGE_KEY = 'ussh-quick-commands';
-const TREE_INDENT = 16;
+const TREE_INDENT = 12;
 const FOLDER_CONTENT_OFFSET = 28;
 
 function createId(prefix) {
@@ -91,8 +91,8 @@ function CommandItem({ command, connected, onRun, onEdit, onDelete }) {
       <TerminalSquare className="h-3.5 w-3.5 shrink-0 text-primary/80" />
       <button
         type="button"
-        className="flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left"
-        onClick={() => onEdit(command)}
+        className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 py-1 text-left"
+        onDoubleClick={() => onRun(command.content)}
         title={title}
       >
         <span className={cn('block truncate text-[11px] font-medium', !command.name.trim() && 'font-mono')}>{title}</span>
@@ -100,13 +100,23 @@ function CommandItem({ command, connected, onRun, onEdit, onDelete }) {
       <Button
         variant="ghost"
         size="icon"
-        className="h-6 w-6 shrink-0 text-primary hover:bg-primary/10 hover:text-primary"
+        className="h-6 w-6 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 text-primary hover:bg-primary/10 hover:text-primary"
         onClick={() => onRun(command.content)}
         disabled={!connected}
         title={connected ? '执行命令' : '连接终端后可执行'}
         aria-label={`执行 ${commandTitle(command)}`}
       >
         <Play className="h-3 w-3" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-6 w-6 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+        onClick={() => onEdit(command)}
+        title="编辑命令"
+        aria-label={`编辑 ${commandTitle(command)}`}
+      >
+        <Pencil className="h-3 w-3" />
       </Button>
       <Button
         variant="ghost"
@@ -172,7 +182,7 @@ function FolderNode({
         >
           {isOpen ? <FolderOpen className="h-3.5 w-3.5 shrink-0 text-amber-500" /> : <Folder className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
           <span className="truncate text-[11px] font-medium">{folder.name}</span>
-          <span className="ml-auto shrink-0 rounded-full bg-muted px-1.5 text-[9px] text-muted-foreground">
+          <span className="shrink-0 rounded-full bg-muted px-1.5 text-[9px] text-muted-foreground">
             {childCommands.length}
           </span>
         </button>
@@ -350,27 +360,18 @@ function QuickCommands() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background/20">
+    <div className="select-none flex h-full min-h-0 flex-col bg-background/20" onContextMenu={e => e.preventDefault()}>
       <ScrollArea className="quick-commands-scroll min-h-0 flex-1">
-        <div className="space-y-3 p-2.5">
+        <div className="space-y-3 p-1.5">
           <section>
-            <div className="mb-1 flex items-center justify-between px-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              <span>目录</span>
-              <span>{store.folders.length}</span>
-            </div>
             <div className="space-y-0.5">
-              <button
-                type="button"
-                className={cn(
-                  'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors',
-                  selectedFolderId === null ? 'bg-primary/10 text-primary' : 'hover:bg-accent/70',
-                )}
-                onClick={() => setSelectedFolderId(null)}
+              <div
+                className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1.5"
               >
                 <Home className="h-3.5 w-3.5 shrink-0" />
                 <span className="text-[11px] font-medium">根目录</span>
                 <span className="ml-auto rounded-full bg-muted px-1.5 text-[9px] text-muted-foreground">{rootCommands.length}</span>
-              </button>
+              </div>
               {rootFolders.map(folder => (
                 <FolderNode
                   key={folder.id}

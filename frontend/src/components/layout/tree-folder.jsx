@@ -9,8 +9,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-export function TreeFolder({ folder, children, emptyHint, onMoveNode, onReorderNode, canReorderNode, sortable = true, onAddFolder, onAddLink, onEdit, onDelete }) {
-  const [open, setOpen] = useState(true);
+export function TreeFolder({ folder, children, emptyHint, defaultOpen = true, onMoveNode, onReorderNode, canReorderNode, sortable = true, onAddFolder, onAddLink, onEdit, onDelete }) {
+  const [open, setOpen] = useState(defaultOpen);
   const [dropping, setDropping] = useState(false);
   const [dropPosition, setDropPosition] = useState(null);
   const [contextMenu, setContextMenu] = useState({ open: false, x: 0, y: 0 });

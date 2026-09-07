@@ -20,9 +20,9 @@ func BuildApplicationMenu(app *App) *menu.Menu {
 		}
 	})
 	softwareMenu.AddSeparator()
-	softwareMenu.AddText("退出", nil, func(_ *menu.CallbackData) {
+	softwareMenu.AddText("退出", keys.CmdOrCtrl("Q"), func(_ *menu.CallbackData) {
 		if app.ctx != nil {
-			runtime.Quit(app.ctx)
+			runtime.EventsEmit(app.ctx, "show-quit-confirm")
 		}
 	})
 	applicationMenu.Append(menu.EditMenu())

@@ -270,7 +270,7 @@ export function useTabs({ restoreTabs = true } = {}) {
     return true;
   }, [activeWorkspaceId, tabs, workspaces]);
 
-  const newTab = useCallback(() => {
+  const newTab = useCallback(afterId => {
     const id = newTabId();
     const tab = {
       id,
@@ -282,7 +282,11 @@ export function useTabs({ restoreTabs = true } = {}) {
       workspaceId: activeWorkspaceId,
       form: { ...blankForm },
     };
-    setTabs(prev => [...prev, tab]);
+    setTabs(prev => {
+      const index = prev.findIndex(item => item.id === afterId);
+      if (index < 0) return [...prev, tab];
+      return [...prev.slice(0, index + 1), tab, ...prev.slice(index + 1)];
+    });
     setWorkspaces(prev => prev.map(workspace => (
       workspace.id === activeWorkspaceId ? { ...workspace, activeTabId: id } : workspace
     )));

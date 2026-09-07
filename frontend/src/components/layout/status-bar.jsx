@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Monitor, Moon, Sun } from 'lucide-react';
+import { ChevronUp, Home, Layers3, Monitor, Moon, Send, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -22,8 +22,10 @@ function ThemeIcon({ resolved }) {
   return <Monitor className="h-3.5 w-3.5" />;
 }
 
-export function StatusBar({ activeTab, activeConnectionCount, globalStatus, onRefreshSystemInfo }) {
+export function StatusBar({ activeTab, activeConnectionCount, globalStatus, onRefreshSystemInfo, workspaces, activeWorkspaceId, onSwitchWorkspace, showBroadcastInput, onToggleBroadcastInput }) {
   const { theme, setTheme, resolvedTheme } = useTheme();
+  const activeWorkspace = workspaces.find(workspace => workspace.id === activeWorkspaceId);
+  const WorkspaceIcon = activeWorkspace?.icon === 'home' ? Home : Layers3;
   const connected = activeTab?.status === 'connected';
   const connectionInProgress = activeTab?.status === 'connecting';
   const showSystemInfo = connected || connectionInProgress;
@@ -46,6 +48,35 @@ export function StatusBar({ activeTab, activeConnectionCount, globalStatus, onRe
       className="acrylic-panel flex h-8 select-none items-center gap-2 px-3 text-xs text-muted-foreground"
       onContextMenu={event => event.preventDefault()}
     >
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            className="h-6 max-w-[12rem] shrink-0 gap-1.5 px-1.5 text-xs font-normal focus-visible:ring-0 focus-visible:ring-offset-0"
+            aria-label={`切换工作区，当前工作区：${activeWorkspace?.name ?? '未选择'}`}
+            title={activeWorkspace?.name}
+          >
+            <WorkspaceIcon className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{activeWorkspace?.name ?? '工作区'}</span>
+            <ChevronUp className="h-3 w-3 shrink-0" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="top" align="start" className="max-h-[min(20rem,var(--radix-dropdown-menu-content-available-height))] max-w-[20rem] overflow-y-auto select-none">
+          <DropdownMenuLabel>切换工作区</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuRadioGroup value={activeWorkspaceId} onValueChange={onSwitchWorkspace}>
+            {workspaces.map(workspace => {
+              const Icon = workspace.icon === 'home' ? Home : Layers3;
+              return (
+                <DropdownMenuRadioItem key={workspace.id} value={workspace.id} className="gap-2 text-xs select-none" title={workspace.name}>
+                  <Icon className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{workspace.name}</span>
+                </DropdownMenuRadioItem>
+              );
+            })}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <span
         className={cn(
           'h-1.5 w-1.5 shrink-0 rounded-full',
@@ -53,10 +84,10 @@ export function StatusBar({ activeTab, activeConnectionCount, globalStatus, onRe
         )}
       />
       <span className="shrink-0">{activeConnectionCount} 个活动会话</span>
-      <Separator orientation="vertical" className="mx-1 h-3" />
+      <Separator orientation="vertical" className="mx-1 h-3 bg-muted-foreground/30" />
       <span className="min-w-0 truncate">{connectionStatus}</span>
 
-      <div className="ml-auto flex min-w-0 items-center gap-2">
+      <div className="ml-auto flex min-w-0 items-center gap-1">
         {showSystemInfo && (
           <div
             className="flex min-w-0 items-center gap-2"
@@ -69,7 +100,16 @@ export function StatusBar({ activeTab, activeConnectionCount, globalStatus, onRe
             <span className="shrink-0">内存 {systemInfoLoading ? '…' : systemInfo?.memory || '—'}</span>
           </div>
         )}
-        <Separator orientation="vertical" className="mx-1 h-3" />
+        <Separator orientation="vertical" className="mx-1 h-3 bg-muted-foreground/30" />
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn('h-6 w-6', showBroadcastInput && 'text-foreground')}
+          onClick={onToggleBroadcastInput}
+          aria-label="广播输入"
+        >
+          <Send className="h-3.5 w-3.5" />
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="h-6 w-6" aria-label="切换主题">

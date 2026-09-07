@@ -171,36 +171,46 @@ function formatDuration(ms) {
 }
 
 function ServerInfoCard({ tab }) {
+  const [expanded, setExpanded] = useState(false);
   const info = tab?.systemInfo;
   if (!info) return null;
 
   const rows = [
     ['连接地址', `${info.host || tab.host || '未知'}${info.port && info.port !== 22 ? `:${info.port}` : ''}`],
     ['主机名', info.hostname],
-    ['用户', info.username || tab.username],
     ['系统', info.os],
     ['内核', info.kernel],
-    ['架构', info.architecture],
-    ['Shell', info.shell],
-    ['当前目录', info.cwd],
     ['运行时间', info.uptime],
   ].filter(([, value]) => value);
 
   return (
     <div className="overflow-hidden rounded-lg border border-border/70 bg-secondary/25">
-      <div className="flex items-center gap-1.5 px-2.5 py-2">
+      <button
+        type="button"
+        className="flex w-full items-center gap-1.5 px-2.5 py-2 text-left transition-colors hover:bg-secondary/60"
+        onClick={() => setExpanded(value => !value)}
+        aria-expanded={expanded}
+        title={expanded ? '收起服务器信息' : '展开服务器信息'}
+      >
+        <ChevronRight className={`h-3 w-3 shrink-0 text-muted-foreground transition-transform ${expanded ? 'rotate-90' : ''}`} />
         <Server className="h-3.5 w-3.5 text-primary" />
         <span className="text-[10px] font-semibold">服务器信息</span>
-        <span className="ml-auto text-[9px] text-muted-foreground">会话初始化</span>
-      </div>
-      <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 px-2.5 py-2 text-[10px] leading-relaxed">
-        {rows.map(([label, value]) => (
-          <div key={label} className="contents">
-            <span className="text-muted-foreground">{label}</span>
-            <span className="min-w-0 break-words font-mono text-foreground/90">{value}</span>
-          </div>
-        ))}
-      </div>
+        {!expanded && info.hostname && (
+          <span className="ml-auto truncate text-[10px] font-mono text-muted-foreground/70 max-w-[180px]" title={info.hostname}>
+            {info.hostname}
+          </span>
+        )}
+      </button>
+      {expanded && (
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 px-2.5 pb-2 text-[10px] leading-relaxed">
+          {rows.map(([label, value]) => (
+            <div key={label} className="contents">
+              <span className="text-muted-foreground">{label}</span>
+              <span className="min-w-0 break-words font-mono text-foreground/90">{value}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -911,10 +921,9 @@ function AIAgent() {
   const canExecute = activeTab?.status === 'connected';
 
   return (
-    <div className="flex h-full w-full min-h-0 min-w-0 flex-col bg-background/35">
+    <div className="select-none flex h-full w-full min-h-0 min-w-0 flex-col bg-background/35" onContextMenu={e => e.preventDefault()}>
       <ScrollArea className="ai-agent-scroll-area min-h-0 w-full flex-1">
         <div className="w-full min-w-0 max-w-full space-y-3 p-3">
-          <ServerInfoCard tab={activeTab} />
           {messages.length === 0 ? (
             <div className="flex min-h-36 flex-col items-center justify-center gap-2 px-5 text-center">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
@@ -977,7 +986,11 @@ function AIAgent() {
         </div>
       </ScrollArea>
 
-      <div className="shrink-0 p-3">
+      <div className="shrink-0 px-3 pt-2">
+        <ServerInfoCard tab={activeTab} />
+      </div>
+
+      <div className="shrink-0 p-3 pt-2">
         <div className="relative min-h-[100px] rounded-2xl border border-border/70 bg-background/60 shadow-sm transition-[border-color,box-shadow] focus-within:border-ring/70 focus-within:ring-2 focus-within:ring-ring/15">
           <textarea
             id="ai-agent-content"

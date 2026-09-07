@@ -178,6 +178,11 @@ export function onShowSettings(handler) {
   return () => EventsOff('show-settings', handler);
 }
 
+export function onShowQuitConfirm(handler) {
+  EventsOn('show-quit-confirm', handler);
+  return () => EventsOff('show-quit-confirm', handler);
+}
+
 export function onAIChatToken(handler) {
   EventsOn('ai-chat-token', handler);
   return () => EventsOff('ai-chat-token', handler);

@@ -35,24 +35,9 @@ import {
 // 采集脚本只读系统接口，并通过固定记录格式返回，避免依赖 top/vmstat 等发行版差异较大的输出。
 const monitorCommand = String.raw`
 printf '%s\n' '__USSH_MONITOR_BEGIN__'
-cpu_snapshot() {
-  if [ -r /proc/stat ]; then
-    awk '/^cpu / {print $2, $3, $4, $5, $6, $7, $8, $9; exit}' /proc/stat 2>/dev/null
-  fi
-}
-cpu_1=$(cpu_snapshot)
-sleep 1
-cpu_2=$(cpu_snapshot)
-if [ -n "$cpu_1" ] && [ -n "$cpu_2" ]; then
-  awk -v first="$cpu_1" -v second="$cpu_2" 'BEGIN {
-    split(first, a, / +/)
-    split(second, b, / +/)
-    total1 = a[1]+a[2]+a[3]+a[4]+a[5]+a[6]+a[7]+a[8]
-    idle1 = a[4]+a[5]
-    total2 = b[1]+b[2]+b[3]+b[4]+b[5]+b[6]+b[7]+b[8]
-    idle2 = b[4]+b[5]
-    if (total2 > total1) printf "cpu_usage=%.1f\n", 100 * (1 - (idle2-idle1)/(total2-total1))
-  }'
+cpu_stat=$(awk '/^cpu / {print $2, $3, $4, $5, $6, $7, $8, $9; exit}' /proc/stat 2>/dev/null)
+if [ -n "$cpu_stat" ]; then
+  printf 'cpu_stat_raw=%s\n' "$cpu_stat"
 else
   top -l 2 -n 0 2>/dev/null | awk '/CPU usage/ {for (i=1; i<=NF; i++) if ($(i) ~ /%$/ && $(i+1) == "idle,") {gsub("%", "", $(i)); usage=100-$(i)}} END {if (usage != "") printf "cpu_usage=%.1f\n", usage}' 2>/dev/null
 fi
@@ -88,19 +73,10 @@ net_snapshot() {
     netstat -ib 2>/dev/null | awk 'NR > 1 && $1 != "Name" {rx += $7; tx += $10} END {printf "%d %d", rx+0, tx+0}'
   fi
 }
-net_1=$(net_snapshot)
-sleep 0.1
-net_2=$(net_snapshot)
-awk -v first="$net_1" -v second="$net_2" 'BEGIN {
-  split(first, a, / +/)
-  split(second, b, / +/)
-  printf "net_rx_bytes=%s\n", b[1]
-  printf "net_tx_bytes=%s\n", b[2]
-  if (b[1] >= a[1]) printf "net_rx_rate=%.0f\n", (b[1]-a[1])*10
-  else printf "net_rx_rate=0\n"
-  if (b[2] >= a[2]) printf "net_tx_rate=%.0f\n", (b[2]-a[2])*10
-  else printf "net_tx_rate=0\n"
-}'
+net_raw=$(net_snapshot)
+printf 'net_rx_bytes=%s\n' "$(echo "$net_raw" | awk '{print $1}')"
+printf 'net_tx_bytes=%s\n' "$(echo "$net_raw" | awk '{print $2}')"
+printf 'net_raw=%s\n' "$net_raw"
 if [ -r /proc/net/dev ]; then
   awk -F: 'NR > 2 {gsub(/^ +| +$/, "", $1); split($2, a, / +/); if ($1 != "") printf "net_if\t%s\t%s\t%s\n", $1, a[1]+0, a[9]+0}' /proc/net/dev 2>/dev/null
 else
@@ -610,6 +586,9 @@ function MonitorPlugin() {
   const [error, setError] = useState('');
   const loadingRef = useRef(false);
   const requestRef = useRef(0);
+  const prevCpuStatRef = useRef(null);
+  const prevNetRawRef = useRef(null);
+  const prevNetTimeRef = useRef(0);
   const [ports, setPorts] = useState([]);
   const [portLoading, setPortLoading] = useState(false);
   const [portError, setPortError] = useState('');
@@ -635,7 +614,49 @@ function MonitorPlugin() {
       if (result?.timedOut) throw new Error('监控采集超时');
       if (!result || result.exitCode !== 0) throw new Error(String(result?.output || '监控采集失败').trim());
       if (requestId !== requestRef.current) return;
-      setSnapshot(parseMonitorOutput(result.output));
+      const parsed = parseMonitorOutput(result.output);
+
+      // 从前后两次原始计数器计算 CPU 使用率（避免命令内 sleep 1）
+      if (parsed.cpuStatRaw) {
+        const prev = prevCpuStatRef.current;
+        if (prev) {
+          const a = prev.split(/ +/).map(Number);
+          const b = parsed.cpuStatRaw.split(/ +/).map(Number);
+          if (a.length >= 8 && b.length >= 8) {
+            const total1 = a[0] + a[1] + a[2] + a[3] + a[4] + a[5] + a[6] + a[7];
+            const idle1 = a[3] + a[4];
+            const total2 = b[0] + b[1] + b[2] + b[3] + b[4] + b[5] + b[6] + b[7];
+            const idle2 = b[3] + b[4];
+            if (total2 > total1) {
+              parsed.cpu.usage = Math.round((1 - (idle2 - idle1) / (total2 - total1)) * 1000) / 10;
+            }
+          }
+        }
+        prevCpuStatRef.current = parsed.cpuStatRaw;
+      } else if (parsed.cpu.usage !== null) {
+        // macOS fallback — top 已自带采样
+        prevCpuStatRef.current = null;
+      }
+
+      // 从前后两次网络累计字节数计算速率
+      if (parsed.netRaw) {
+        const now = Date.now();
+        const prev = prevNetRawRef.current;
+        const prevTime = prevNetTimeRef.current;
+        if (prev && prevTime) {
+          const a = prev.split(/ +/).map(Number);
+          const b = parsed.netRaw.split(/ +/).map(Number);
+          const elapsed = (now - prevTime) / 1000;
+          if (elapsed > 0 && a.length >= 2 && b.length >= 2) {
+            if (b[0] >= a[0]) parsed.network.rxRate = Math.round((b[0] - a[0]) / elapsed);
+            if (b[1] >= a[1]) parsed.network.txRate = Math.round((b[1] - a[1]) / elapsed);
+          }
+        }
+        prevNetRawRef.current = parsed.netRaw;
+        prevNetTimeRef.current = now;
+      }
+
+      setSnapshot(parsed);
     } catch (e) {
       if (requestId === requestRef.current) setError(String(e?.message || e));
     } finally {
@@ -646,6 +667,9 @@ function MonitorPlugin() {
   useEffect(() => {
     if (view !== 'performance') return undefined;
     requestRef.current += 1;
+    prevCpuStatRef.current = null;
+    prevNetRawRef.current = null;
+    prevNetTimeRef.current = 0;
     setSnapshot(EMPTY_MONITOR_SNAPSHOT);
     setError('');
     if (!connected) return undefined;
@@ -773,7 +797,7 @@ function MonitorPlugin() {
   }
 
   return (
-      <div className="flex h-full min-h-0 min-w-0 flex-col">
+      <div className="select-none flex h-full min-h-0 min-w-0 flex-col" onContextMenu={e => e.preventDefault()}>
       <div className="flex shrink-0 items-center gap-1 px-2 py-1.5">
         {[
           ['performance', '性能', Activity],

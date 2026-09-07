@@ -248,6 +248,38 @@ function ContextMenu({ items, pos, onClose }) {
   );
 }
 
+async function collectFilesFromDrop(items) {
+  const files = [];
+  const queue = [];
+
+  for (const item of items) {
+    const entry = item.webkitGetAsEntry();
+    if (entry) queue.push({ entry, parentPath: '' });
+  }
+
+  while (queue.length > 0) {
+    const { entry, parentPath } = queue.shift();
+    if (entry.isFile) {
+      const file = await new Promise(resolve => entry.file(resolve));
+      const relPath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
+      Object.defineProperty(file, 'webkitRelativePath', {
+        value: relPath,
+        writable: false,
+      });
+      files.push(file);
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      const entries = await new Promise(resolve => reader.readEntries(resolve));
+      const newParent = parentPath ? `${parentPath}/${entry.name}` : entry.name;
+      for (const child of entries) {
+        queue.push({ entry: child, parentPath: newParent });
+      }
+    }
+  }
+  return files;
+}
+
+
 function FileBrowser() {
   const { activeTab, api, setHeaderActions } = usePluginContext();
   const [cwd, setCwd] = useState('/');
@@ -264,6 +296,7 @@ function FileBrowser() {
   const [uploadTask, setUploadTask] = useState(null);
   const [uploadPanelOpen, setUploadPanelOpen] = useState(false);
   const [uploadConflict, setUploadConflict] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef(null);
   const folderInputRef = useRef(null);
   const conflictResolverRef = useRef(null);
@@ -579,7 +612,7 @@ function FileBrowser() {
 
   return (
     <TooltipProvider delayDuration={500}>
-      <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden select-none">
+      <div className="select-none flex h-full min-h-0 min-w-0 flex-col overflow-hidden" onContextMenu={e => e.preventDefault()}>
       {/* 工具栏 */}
       <div className="shrink-0 px-1 py-1">
         <div className="flex items-center gap-1">
@@ -637,12 +670,43 @@ function FileBrowser() {
 
       {/* 文件列表 */}
       <div
-        className="sftp-file-list min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto"
+        className={cn(
+          'sftp-file-list relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto',
+          dragOver && 'outline-dashed outline-2 outline-primary/50',
+        )}
         onContextMenu={e => handleContextMenu(e, null)}
         onDoubleClick={e => {
           if (e.target === e.currentTarget) goUp();
         }}
+        onDragOver={e => {
+          e.preventDefault();
+          e.stopPropagation();
+          setDragOver(true);
+        }}
+        onDragLeave={e => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (e.currentTarget === e.target || !e.currentTarget.contains(e.relatedTarget)) {
+            setDragOver(false);
+          }
+        }}
+        onDrop={async e => {
+          e.preventDefault();
+          e.stopPropagation();
+          setDragOver(false);
+          if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+            const files = await collectFilesFromDrop(e.dataTransfer.items);
+            if (files.length > 0) uploadFiles(files);
+          }
+        }}
       >
+        {dragOver && (
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-primary/5">
+            <div className="rounded-lg border border-dashed border-primary/40 bg-background/80 px-4 py-2 text-xs text-primary">
+              释放文件以上传至当前目录
+            </div>
+          </div>
+        )}
         {error && (
           <div className="px-3 py-2 text-xs text-red-500">{error}</div>
         )}

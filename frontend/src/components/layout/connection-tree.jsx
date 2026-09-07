@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Copy, FolderPlus, Link2, Terminal, Pencil, ExternalLink, Search, Trash2 } from 'lucide-react';
+import { Copy, FolderPlus, Link2, Plug, Terminal, Pencil, ExternalLink, Search, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -98,10 +98,11 @@ export function ConnectionTree({
     return true;
   };
 
-  const renderFolder = ({ folder, folders: childFolders, links }) => (
+  const renderFolder = ({ folder, folders: childFolders, links }, nested = false) => (
     <TreeFolder
       key={folder.id}
       folder={folder}
+      defaultOpen={!nested}
       onMoveNode={onMoveNode}
       onReorderNode={handleReorderNode}
       canReorderNode={canReorderNode}
@@ -112,7 +113,7 @@ export function ConnectionTree({
       onDelete={onDeleteFolder}
       emptyHint="拖入连接或目录"
     >
-      {childFolders.map(renderFolder)}
+      {childFolders.map(item => renderFolder(item, true))}
       {links.map(node => (
         <SavedRootNode
           key={node.id}
@@ -240,7 +241,7 @@ export function ConnectionTree({
 }
 
 function SavedRootNode({ node, color, nested = false, onOpen, onEdit, onClone, onDelete, onReorderNode, canReorderNode, sortable = true }) {
-  const showEdit = Boolean(onEdit || onDelete);
+  const showActions = Boolean(onOpen || onEdit);
   const [contextMenu, setContextMenu] = useState({ open: false, x: 0, y: 0 });
   const [dropPosition, setDropPosition] = useState(null);
   const menuRef = useRef(null);
@@ -308,6 +309,7 @@ function SavedRootNode({ node, color, nested = false, onOpen, onEdit, onClone, o
         onDrop={handleDrop}
         onDoubleClick={() => onOpen(node)}
         onKeyDown={event => {
+          if (event.target !== event.currentTarget) return;
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
             onOpen(node);
@@ -328,21 +330,41 @@ function SavedRootNode({ node, color, nested = false, onOpen, onEdit, onClone, o
           strokeWidth={1.8}
         />
         <span className="truncate">{node.name}</span>
-        {showEdit && (
-          <span className="ml-auto flex items-center pr-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-5 w-6"
-              onClick={event => {
-                event.stopPropagation();
-                event.preventDefault();
-                onEdit(node);
-              }}
-              aria-label="编辑连接"
-            >
-              <Pencil className="h-3 w-3" />
-            </Button>
+        {showActions && (
+          <span
+            className="ml-auto flex shrink-0 items-center pr-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+            onDoubleClick={event => event.stopPropagation()}
+          >
+            {onOpen && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-6"
+                onClick={event => {
+                  event.stopPropagation();
+                  onOpen(node);
+                }}
+                aria-label="连接终端"
+                title="连接终端"
+              >
+                <Plug className="h-3 w-3" />
+              </Button>
+            )}
+            {onEdit && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-6"
+                onClick={event => {
+                  event.stopPropagation();
+                  event.preventDefault();
+                  onEdit(node);
+                }}
+                aria-label="编辑连接"
+              >
+                <Pencil className="h-3 w-3" />
+              </Button>
+            )}
           </span>
         )}
       </div>

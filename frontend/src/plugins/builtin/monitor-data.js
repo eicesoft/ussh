@@ -3,8 +3,10 @@ const MONITOR_END = '__USSH_MONITOR_END__';
 
 export const EMPTY_MONITOR_SNAPSHOT = {
   cpu: { cores: null, usage: null, load1: null, load5: null, load15: null },
+  cpuStatRaw: null,
   memory: { totalKb: null, usedKb: null, availableKb: null, usage: null },
   network: { rxBytes: null, txBytes: null, rxRate: null, txRate: null, interfaces: [] },
+  netRaw: null,
   disks: [],
 };
 
@@ -67,6 +69,7 @@ export function parseMonitorOutput(output) {
     switch (key) {
       case 'cpu_cores': snapshot.cpu.cores = numberOrNull(value); break;
       case 'cpu_usage': snapshot.cpu.usage = percentOrNull(value); break;
+      case 'cpu_stat_raw': snapshot.cpuStatRaw = value; break;
       case 'load_1m': snapshot.cpu.load1 = numberOrNull(value); break;
       case 'load_5m': snapshot.cpu.load5 = numberOrNull(value); break;
       case 'load_15m': snapshot.cpu.load15 = numberOrNull(value); break;
@@ -78,6 +81,7 @@ export function parseMonitorOutput(output) {
       case 'net_tx_bytes': snapshot.network.txBytes = numberOrNull(value); break;
       case 'net_rx_rate': snapshot.network.rxRate = numberOrNull(value); break;
       case 'net_tx_rate': snapshot.network.txRate = numberOrNull(value); break;
+      case 'net_raw': snapshot.netRaw = value; break;
       default: break;
     }
   }

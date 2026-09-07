@@ -82,7 +82,11 @@ if [ -r /proc/net/dev ]; then
 else
   netstat -ib 2>/dev/null | awk 'NR > 1 && $1 != "Name" && $1 != "lo0" {printf "net_if\t%s\t%s\t%s\n", $1, $7+0, $10+0}'
 fi
-df -P -k 2>/dev/null | awk 'NR > 1 && $1 !~ /^(tmpfs|devtmpfs|squashfs|overlay)$/ && $2 ~ /^[0-9]+$/ {print "disk\t" $NF "\t" $2 "\t" $3 "\t" $4 "\t" $5}'
+if command -v timeout >/dev/null 2>&1; then
+  timeout 3 df -P -k -l 2>/dev/null | awk 'NR > 1 && $1 !~ /^(tmpfs|devtmpfs|squashfs|overlay)$/ && $2 ~ /^[0-9]+$/ {print "disk\t" $NF "\t" $2 "\t" $3 "\t" $4 "\t" $5}'
+else
+  df -P -k -l 2>/dev/null | awk 'NR > 1 && $1 !~ /^(tmpfs|devtmpfs|squashfs|overlay)$/ && $2 ~ /^[0-9]+$/ {print "disk\t" $NF "\t" $2 "\t" $3 "\t" $4 "\t" $5}'
+fi
 printf '%s\n' '__USSH_MONITOR_END__'
 `;
 

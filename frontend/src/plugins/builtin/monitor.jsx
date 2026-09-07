@@ -599,6 +599,7 @@ function MonitorPlugin() {
   const [error, setError] = useState('');
   const loadingRef = useRef(false);
   const requestRef = useRef(0);
+  const isMountedRef = useRef(true);
   const prevCpuStatRef = useRef(null);
   const prevNetRawRef = useRef(null);
   const prevNetTimeRef = useRef(0);
@@ -692,6 +693,7 @@ function MonitorPlugin() {
 
   useEffect(() => {
     if (view !== 'performance') return undefined;
+    isMountedRef.current = true;
     prevCpuStatRef.current = null;
     prevNetRawRef.current = null;
     prevNetTimeRef.current = 0;
@@ -701,7 +703,6 @@ function MonitorPlugin() {
     refresh();
     const timer = window.setInterval(refresh, 5000);
     return () => {
-      requestRef.current += 1;
       window.clearInterval(timer);
     };
   }, [activeTab?.id, connected, refresh, view]);

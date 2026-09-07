@@ -35,6 +35,8 @@ import {
 // 采集脚本只读系统接口，并通过固定记录格式返回，避免依赖 top/vmstat 等发行版差异较大的输出。
 const monitorCommand = String.raw`
 printf '%s\n' '__USSH_MONITOR_BEGIN__'
+tm_now() { date +%s 2>/dev/null || echo 0; }
+printf 'tm_cpu_s=%s\n' "$(tm_now)"
 cpu_stat=$(awk '/^cpu / {print $2, $3, $4, $5, $6, $7, $8, $9; exit}' /proc/stat 2>/dev/null)
 if [ -n "$cpu_stat" ]; then
   printf 'cpu_stat_raw=%s\n' "$cpu_stat"
@@ -50,6 +52,8 @@ awk -v loads="$load_avg" 'BEGIN {
   printf "load_5m=%s\n", a[2]
   printf "load_15m=%s\n", a[3]
 }'
+printf 'tm_cpu_e=%s\n' "$(tm_now)"
+printf 'tm_mem_s=%s\n' "$(tm_now)"
 mem_total=$(awk '$1 == "MemTotal:" {print $2; exit}' /proc/meminfo 2>/dev/null)
 mem_available=$(awk '$1 == "MemAvailable:" {print $2; exit}' /proc/meminfo 2>/dev/null)
 [ -z "$mem_available" ] && mem_available=$(awk '$1 == "MemFree:" {print $2; exit}' /proc/meminfo 2>/dev/null)
@@ -66,6 +70,8 @@ if [ -n "$mem_total" ] && [ -n "$mem_available" ]; then
   printf 'mem_used_kb=%s\n' "$mem_used"
   awk -v used="$mem_used" -v total="$mem_total" 'BEGIN { if (total > 0) printf "mem_usage=%.1f\n", 100*used/total }'
 fi
+printf 'tm_mem_e=%s\n' "$(tm_now)"
+printf 'tm_net_s=%s\n' "$(tm_now)"
 net_snapshot() {
   if [ -r /proc/net/dev ]; then
     awk -F: 'NR > 2 {gsub(/^ +| +$/, "", $1); split($2, a, / +/); rx += a[1]; tx += a[9]} END {printf "%d %d", rx+0, tx+0}' /proc/net/dev 2>/dev/null
@@ -82,11 +88,14 @@ if [ -r /proc/net/dev ]; then
 else
   netstat -ib 2>/dev/null | awk 'NR > 1 && $1 != "Name" && $1 != "lo0" {printf "net_if\t%s\t%s\t%s\n", $1, $7+0, $10+0}'
 fi
+printf 'tm_net_e=%s\n' "$(tm_now)"
+printf 'tm_disk_s=%s\n' "$(tm_now)"
 if command -v timeout >/dev/null 2>&1; then
   timeout 3 df -P -k -l 2>/dev/null | awk 'NR > 1 && $1 !~ /^(tmpfs|devtmpfs|squashfs|overlay)$/ && $2 ~ /^[0-9]+$/ {print "disk\t" $NF "\t" $2 "\t" $3 "\t" $4 "\t" $5}'
 else
   df -P -k -l 2>/dev/null | awk 'NR > 1 && $1 !~ /^(tmpfs|devtmpfs|squashfs|overlay)$/ && $2 ~ /^[0-9]+$/ {print "disk\t" $NF "\t" $2 "\t" $3 "\t" $4 "\t" $5}'
 fi
+printf 'tm_disk_e=%s\n' "$(tm_now)"
 printf '%s\n' '__USSH_MONITOR_END__'
 `;
 
@@ -661,6 +670,19 @@ function MonitorPlugin() {
       }
 
       setSnapshot(parsed);
+
+      if (parsed.timing?.tm_cpu_s && parsed.timing?.tm_disk_e) {
+        const t = parsed.timing;
+        const total = t.tm_disk_e - t.tm_cpu_s;
+        const cpu = (t.tm_cpu_e || t.tm_cpu_s) - t.tm_cpu_s;
+        const mem = (t.tm_mem_e || t.tm_cpu_s) - (t.tm_mem_s || t.tm_cpu_s);
+        const net = (t.tm_net_e || t.tm_cpu_s) - (t.tm_net_s || t.tm_cpu_s);
+        const disk = (t.tm_disk_e || t.tm_cpu_s) - (t.tm_disk_s || t.tm_cpu_s);
+        console.log(
+          `[监控耗时] SSH=%dms  CPU=%ds  MEM=%ds  NET=%ds  DISK=%ds  total=%ds`,
+          result.durationMs, cpu, mem, net, disk, total,
+        );
+      }
     } catch (e) {
       if (requestId === requestRef.current) setError(String(e?.message || e));
     } finally {

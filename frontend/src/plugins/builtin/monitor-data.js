@@ -4,6 +4,7 @@ const MONITOR_END = '__USSH_MONITOR_END__';
 export const EMPTY_MONITOR_SNAPSHOT = {
   cpu: { cores: null, usage: null, load1: null, load5: null, load15: null },
   cpuStatRaw: null,
+  timing: {},
   memory: { totalKb: null, usedKb: null, availableKb: null, usage: null },
   network: { rxBytes: null, txBytes: null, rxRate: null, txRate: null, interfaces: [] },
   netRaw: null,
@@ -82,7 +83,10 @@ export function parseMonitorOutput(output) {
       case 'net_rx_rate': snapshot.network.rxRate = numberOrNull(value); break;
       case 'net_tx_rate': snapshot.network.txRate = numberOrNull(value); break;
       case 'net_raw': snapshot.netRaw = value; break;
-      default: break;
+      default: {
+        if (key.startsWith('tm_')) snapshot.timing[key] = Number(value) || 0;
+        break;
+      }
     }
   }
 

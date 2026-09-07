@@ -618,6 +618,7 @@ function MonitorPlugin() {
   const processRequestRef = useRef(0);
 
   const refresh = useCallback(async () => {
+    console.log('[监控] refresh called, connected=%s tabId=%s loading=%s', connected, activeTab?.id, loadingRef.current);
     if (!connected || !activeTab?.id || loadingRef.current) return;
     loadingRef.current = true;
     const requestId = ++requestRef.current;
@@ -691,6 +692,7 @@ function MonitorPlugin() {
   }, [activeTab?.id, api, connected]);
 
   useEffect(() => {
+    console.log('[监控] performance useEffect fired, view=%s connected=%s tabId=%s', view, connected, activeTab?.id);
     if (view !== 'performance') return undefined;
     requestRef.current += 1;
     prevCpuStatRef.current = null;

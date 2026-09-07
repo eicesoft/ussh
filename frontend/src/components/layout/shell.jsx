@@ -96,7 +96,7 @@ export function Shell() {
   const [deletingWorkspace, setDeletingWorkspace] = useState(null);
   const [activeUtility, setActiveUtility] = useState(null);
   const [isWindowMaximised, setIsWindowMaximised] = useState(false);
-  const [connectionTreeWidth, setConnectionTreeWidth] = useState(240);
+  const connectionTreeHeaderRef = useRef(null);
   const [isConnectionTreeVisible, setIsConnectionTreeVisible] = useState(true);
   const connectionTreePanelRef = usePanelRef();
   const settingsButtonRef = useRef(null);
@@ -495,7 +495,7 @@ export function Shell() {
   const syncConnectionTreeWidth = useCallback(({ inPixels }) => {
     const nextWidth = Math.round(inPixels);
     if (nextWidth === 0) return;
-    setConnectionTreeWidth(width => (width === nextWidth ? width : nextWidth));
+    connectionTreeHeaderRef.current?.style.setProperty('--connection-tree-width', `${nextWidth + 1}px`);
   }, []);
 
   const toggleConnectionTree = useCallback(() => {
@@ -606,8 +606,9 @@ export function Shell() {
       >
         <TooltipProvider delayDuration={300}>
           <div
-            className="flex shrink-0 items-center gap-3 bg-transparent px-3 transition-[width] duration-200 ease-out"
-            style={{ width: isConnectionTreeVisible ? connectionTreeWidth + 1 : 200 }}
+            ref={connectionTreeHeaderRef}
+            className="flex shrink-0 items-center gap-3 bg-transparent px-3"
+            style={{ width: isConnectionTreeVisible ? 'var(--connection-tree-width, 281px)' : 200 }}
           >
             <div
               className="app-no-drag group/window-controls flex items-center gap-2"

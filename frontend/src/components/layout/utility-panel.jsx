@@ -102,7 +102,7 @@ export function UtilityPanel({ active, onToggle }) {
 
   return (
     <aside className="acrylic-panel flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-      <div className="flex h-9 shrink-0 items-center justify-between px-3 text-xs font-semibold">
+      <div className="select-none flex h-9 shrink-0 items-center justify-between px-3 text-xs font-semibold" onContextMenu={e => e.preventDefault()}>
         <span>{title}</span>
         <div className="flex items-center gap-0.5">
           {active === 'ai-agent' && (

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(npx vite build --logLevel error 2 >& 1)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

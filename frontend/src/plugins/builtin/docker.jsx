@@ -488,7 +488,7 @@ function DockerPlugin() {
   const runningCount = containers.filter(isRunning).length;
 
   return (
-    <div className="flex h-full min-h-0 w-full min-w-0 flex-col text-xs">
+    <div className="select-none flex h-full min-h-0 w-full min-w-0 flex-col text-xs" onContextMenu={e => e.preventDefault()}>
       <div className="grid grid-cols-3 gap-1 p-2">
         <MiniStat label="容器" value={`${runningCount} / ${containers.length}`} tone="text-emerald-600 dark:text-emerald-400" />
         <MiniStat label="镜像" value={headerInfo.Images} />

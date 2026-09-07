@@ -6,6 +6,7 @@ import { ConnectionTree } from './connection-tree';
 import { TabBar } from './tab-bar';
 import { UtilityPanel } from './utility-panel';
 import { StatusBar } from './status-bar';
+import { BroadcastInput } from './broadcast-input';
 import { ConnectionForm } from '@/components/connection/connection-form';
 import { TerminalView } from '@/components/connection/terminal-view';
 import { TerminalActions } from '@/components/connection/terminal-actions';
@@ -20,10 +21,20 @@ import { useTabs } from '@/hooks/use-tabs';
 import { useSavedNodes } from '@/hooks/use-saved-nodes';
 import { useTerminalEvents } from '@/hooks/use-terminal-event';
 import { useSettings } from '@/hooks/use-settings';
-import { api, onShowAbout, onShowSettings, runtimeAvailable } from '@/lib/api';
+import { api, onShowAbout, onShowQuitConfirm, onShowSettings, runtimeAvailable } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { DEFAULT_FOLDER_COLOR, normalizeFolderColor } from '@/lib/folder-colors';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import '@/plugins';
 import { PluginContext } from '@/plugins/context';
@@ -71,6 +82,8 @@ export function Shell() {
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [previewTerminalOpacity, setPreviewTerminalOpacity] = useState(null);
   const [showAboutDialog, setShowAboutDialog] = useState(false);
+  const [showQuitDialog, setShowQuitDialog] = useState(false);
+  const [showBroadcastInput, setShowBroadcastInput] = useState(false);
   const [showSavedLinkDialog, setShowSavedLinkDialog] = useState(false);
   const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
   const [showNewWorkspaceDialog, setShowNewWorkspaceDialog] = useState(false);
@@ -83,7 +96,7 @@ export function Shell() {
   const [deletingWorkspace, setDeletingWorkspace] = useState(null);
   const [activeUtility, setActiveUtility] = useState(null);
   const [isWindowMaximised, setIsWindowMaximised] = useState(false);
-  const [connectionTreeWidth, setConnectionTreeWidth] = useState(240);
+  const connectionTreeHeaderRef = useRef(null);
   const [isConnectionTreeVisible, setIsConnectionTreeVisible] = useState(true);
   const connectionTreePanelRef = usePanelRef();
   const settingsButtonRef = useRef(null);
@@ -113,9 +126,11 @@ export function Shell() {
     if (!runtimeAvailable) return undefined;
     const offAbout = onShowAbout(() => setShowAboutDialog(true));
     const offSettings = onShowSettings(openSettingsDialog);
+    const offQuit = onShowQuitConfirm(() => setShowQuitDialog(true));
     return () => {
       offAbout?.();
       offSettings?.();
+      offQuit?.();
     };
   }, [openSettingsDialog]);
 
@@ -371,7 +386,7 @@ export function Shell() {
   const cloneTab = useCallback(
     tab => {
       if (!tab || tab.kind === 'dashboard' || !tab.form) return;
-      const id = newTab();
+      const id = newTab(tab.id);
       const form = { ...tab.form };
       updateTab(id, {
         label: tab.label,
@@ -474,13 +489,13 @@ export function Shell() {
   }, []);
 
   const closeWindow = useCallback(() => {
-    if (window.runtime) Quit();
+    setShowQuitDialog(true);
   }, []);
 
   const syncConnectionTreeWidth = useCallback(({ inPixels }) => {
     const nextWidth = Math.round(inPixels);
     if (nextWidth === 0) return;
-    setConnectionTreeWidth(width => (width === nextWidth ? width : nextWidth));
+    connectionTreeHeaderRef.current?.style.setProperty('--connection-tree-width', `${nextWidth + 1}px`);
   }, []);
 
   const toggleConnectionTree = useCallback(() => {
@@ -503,6 +518,13 @@ export function Shell() {
       setGlobalStatus('已断开连接');
     }
   }, [setTabStatus, writeToTab]);
+
+  const broadcastSend = useCallback((input, tabIds) => {
+    tabIds.forEach(tabId => {
+      api.sendInput(tabId, input).catch(() => {});
+    });
+    setGlobalStatus(`已广播指令到 ${tabIds.length} 个会话`);
+  }, []);
 
   const submitDeleteWorkspace = useCallback(async () => {
     if (!deletingWorkspace) return;
@@ -584,8 +606,9 @@ export function Shell() {
       >
         <TooltipProvider delayDuration={300}>
           <div
-            className="flex shrink-0 items-center gap-3 bg-transparent px-3 transition-[width] duration-200 ease-out"
-            style={{ width: isConnectionTreeVisible ? connectionTreeWidth + 1 : 200 }}
+            ref={connectionTreeHeaderRef}
+            className="flex shrink-0 items-center gap-3 bg-transparent px-3"
+            style={{ width: isConnectionTreeVisible ? 'var(--connection-tree-width, 281px)' : 200 }}
           >
             <div
               className="app-no-drag group/window-controls flex items-center gap-2"
@@ -642,7 +665,6 @@ export function Shell() {
             onDisconnect={disconnectTab}
             onClone={cloneTab}
             onTogglePinned={toggleTabPinned}
-            onNewConnection={openNewConnection}
           />
         </div>
       </header>
@@ -683,6 +705,11 @@ export function Shell() {
             isConnectionTreeVisible ? 'w-px' : 'pointer-events-none w-0 opacity-0',
             'split-resizer--hidden',
           )}
+          style={
+            terminalActive
+              ? { backgroundColor: 'transparent' }
+              : undefined
+          }
         />
         <Panel minSize={460}>
           <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
@@ -740,6 +767,9 @@ export function Shell() {
                         </div>
                       ))}
                   </div>
+                  {showBroadcastInput && (
+                    <BroadcastInput tabs={workspaceTabs} onSend={broadcastSend} />
+                  )}
                 </div>
               </Panel>
               {utilityPanelVisible && (
@@ -762,10 +792,15 @@ export function Shell() {
         </Panel>
       </Group>
       <StatusBar
+        workspaces={workspaces}
+        activeWorkspaceId={activeWorkspaceId}
+        onSwitchWorkspace={switchWorkspace}
         activeTab={activeTab}
         activeConnectionCount={activeConnectionCount}
         globalStatus={globalStatus}
         onRefreshSystemInfo={refreshSystemInfo}
+        showBroadcastInput={showBroadcastInput}
+        onToggleBroadcastInput={() => setShowBroadcastInput(v => !v)}
       />
 
       <SettingsDialog
@@ -822,6 +857,24 @@ export function Shell() {
         onClose={() => setDeletingWorkspace(null)}
         onConfirm={submitDeleteWorkspace}
       />
+
+      <AlertDialog
+        open={showQuitDialog}
+        onOpenChange={next => { if (!next) setShowQuitDialog(false); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认退出？</AlertDialogTitle>
+            <AlertDialogDescription>
+              退出 uSSH 将断开所有活动连接。确定要退出吗？
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowQuitDialog(false)}>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { if (window.runtime) Quit(); }}>退出</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }

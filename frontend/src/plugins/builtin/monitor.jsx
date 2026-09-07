@@ -41,7 +41,7 @@ cpu_stat=$(awk '/^cpu / {print $2, $3, $4, $5, $6, $7, $8, $9; exit}' /proc/stat
 if [ -n "$cpu_stat" ]; then
   printf 'cpu_stat_raw=%s\n' "$cpu_stat"
 else
-  top -l 2 -n 0 2>/dev/null | awk '/CPU usage/ {for (i=1; i<=NF; i++) if ($(i) ~ /%$/ && $(i+1) == "idle,") {gsub("%", "", $(i)); usage=100-$(i)}} END {if (usage != "") printf "cpu_usage=%.1f\n", usage}' 2>/dev/null
+  top -l 2 2>/dev/null | awk '/%Cpu\(s\):/ {if (seen++) {gsub(/[^0-9.]/, "", $2); if ($2 != "") usage=$2}} END {if (usage != "") printf "cpu_usage=%.1f\n", usage}'
 fi
 printf 'cpu_cores=%s\n' "$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc 2>/dev/null || true)"
 load_avg=$(awk '{print $1, $2, $3}' /proc/loadavg 2>/dev/null)

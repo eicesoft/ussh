@@ -24,6 +24,7 @@ function percentOrNull(value) {
 
 export function parseMonitorOutput(output) {
   const snapshot = {
+    ...EMPTY_MONITOR_SNAPSHOT,
     cpu: { ...EMPTY_MONITOR_SNAPSHOT.cpu },
     memory: { ...EMPTY_MONITOR_SNAPSHOT.memory },
     network: { ...EMPTY_MONITOR_SNAPSHOT.network, interfaces: [] },

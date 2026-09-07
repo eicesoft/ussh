@@ -12,6 +12,11 @@ export function TerminalView({ tab, active = true, onSend, onResize, onFocus, on
   const terminalSettingsRef = useRef(terminalSettings);
   const tabStatusRef = useRef(tab.status);
   const reconnectRef = useRef(onReconnect);
+  const activeRef = useRef(active);
+  const onResizeRef = useRef(onResize);
+  const scheduleFitRef = useRef(null);
+  activeRef.current = active;
+  onResizeRef.current = onResize;
   const [ready, setReady] = useState(false);
 
   tabStatusRef.current = tab.status;
@@ -49,13 +54,29 @@ export function TerminalView({ tab, active = true, onSend, onResize, onFocus, on
     termRef.current = term;
     fitRef.current = fit;
 
+    let fitFrame = null;
+    let lastColumns;
+    let lastRows;
     const fitTerminal = () => {
+      fitFrame = null;
+      if (!activeRef.current || !hostRef.current?.clientWidth || !hostRef.current?.clientHeight) return;
       try {
         fit.fit();
-        onResize({ columns: term.cols, rows: term.rows });
+        if (term.cols !== lastColumns || term.rows !== lastRows) {
+          lastColumns = term.cols;
+          lastRows = term.rows;
+          onResizeRef.current({ columns: term.cols, rows: term.rows });
+        }
       } catch (_) {}
     };
-    requestAnimationFrame(fitTerminal);
+    // ResizeObserver and React effects can fire together; fit once before paint.
+    const scheduleFit = () => {
+      if (activeRef.current && fitFrame === null) {
+        fitFrame = requestAnimationFrame(fitTerminal);
+      }
+    };
+    scheduleFitRef.current = scheduleFit;
+    scheduleFit();
 
     const viewport = hostRef.current.querySelector('.xterm-viewport');
     const showScrollIndicator = () => {
@@ -103,11 +124,9 @@ export function TerminalView({ tab, active = true, onSend, onResize, onFocus, on
       onSend(data);
     });
 
-    const ro = new ResizeObserver(() => {
-      fitTerminal();
-    });
+    const ro = new ResizeObserver(scheduleFit);
     ro.observe(hostRef.current);
-    window.addEventListener('resize', fitTerminal);
+    window.addEventListener('resize', scheduleFit);
 
     try {
       term.focus();
@@ -118,7 +137,9 @@ export function TerminalView({ tab, active = true, onSend, onResize, onFocus, on
     return () => {
       if (onTermReady) onTermReady(null, tab.id);
       ro.disconnect();
-      window.removeEventListener('resize', fitTerminal);
+      window.removeEventListener('resize', scheduleFit);
+      if (fitFrame !== null) cancelAnimationFrame(fitFrame);
+      scheduleFitRef.current = null;
       viewport?.removeEventListener('scroll', showScrollIndicator);
       screen?.removeEventListener('contextmenu', pasteOnRightClick, true);
       window.clearTimeout(scrollTimerRef.current);
@@ -137,11 +158,8 @@ export function TerminalView({ tab, active = true, onSend, onResize, onFocus, on
     term.options.cursorBlink = terminalSettings.cursorBlink;
     term.options.fontSize = terminalSettings.fontSize;
     term.options.scrollback = terminalSettings.scrollback;
-    try {
-      fitRef.current?.fit();
-      onResize({ columns: term.cols, rows: term.rows });
-    } catch (_) {}
-  }, [terminalSettings?.cursorBlink, terminalSettings?.fontSize, terminalSettings?.scrollback, onResize]);
+    scheduleFitRef.current?.();
+  }, [terminalSettings?.cursorBlink, terminalSettings?.fontSize, terminalSettings?.scrollback]);
 
   useEffect(() => {
     if (tab.buffer && termRef.current) {
@@ -152,13 +170,8 @@ export function TerminalView({ tab, active = true, onSend, onResize, onFocus, on
   }, [tab.buffer, ready]);
 
   useEffect(() => {
-    if (ready && fitRef.current) {
-      try {
-        fitRef.current.fit();
-        onResize({ columns: termRef.current?.cols, rows: termRef.current?.rows });
-      } catch (_) {}
-    }
-  }, [ready, tab.status]);
+    if (ready && active) scheduleFitRef.current?.();
+  }, [active, ready, tab.status]);
 
   useEffect(() => {
     if (active && ready && termRef.current && tab.id) {

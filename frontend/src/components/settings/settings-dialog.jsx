@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bot, Check, Eye, Palette, RefreshCw, Search, Settings, Terminal } from 'lucide-react';
+import { Bot, Check, Eye, Keyboard, Palette, RefreshCw, Search, Settings, Terminal } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { api } from '@/lib/api';
+import { captureShortcut, formatShortcut } from '@/lib/shortcuts';
 
 const themeOptions = [
   ['system', '跟随系统'],
@@ -57,6 +58,10 @@ export function SettingsDialog({
   const [logSettings, setLogSettings] = useState(null);
   const [logDirty, setLogDirty] = useState(false);
   const [logError, setLogError] = useState('');
+  const [localTerminals, setLocalTerminals] = useState([]);
+  const [localTerminalError, setLocalTerminalError] = useState('');
+  const [terminalFonts, setTerminalFonts] = useState([]);
+  const [terminalFontsError, setTerminalFontsError] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -69,6 +74,25 @@ export function SettingsDialog({
       if (active) setLogSettings(value);
     }).catch(error => {
       if (active) setLogError(String(error));
+    });
+    Promise.all([api.getLocalTerminalSettings(), api.listAvailableLocalTerminals()]).then(([localSettings, terminals]) => {
+      if (!active) return;
+      setLocalTerminals(terminals);
+      setLocalTerminalError('');
+      setDraft(current => ({
+        ...current,
+        terminal: { ...current.terminal, shell: localSettings.shell || '' },
+      }));
+    }).catch(error => {
+      if (active) setLocalTerminalError(String(error));
+    });
+    api.listAvailableTerminalFonts().then(fonts => {
+      if (active) {
+        setTerminalFonts(fonts);
+        setTerminalFontsError('');
+      }
+    }).catch(error => {
+      if (active) setTerminalFontsError(String(error));
     });
     return () => { active = false; };
   }, [open]);
@@ -139,6 +163,9 @@ export function SettingsDialog({
       ai: { ...current.ai, agent: { ...current.ai.agent, [key]: value } },
     }));
   };
+  const updateShortcutDraft = (key, value) => {
+    setDraft(current => ({ ...current, shortcuts: { ...current.shortcuts, [key]: value } }));
+  };
   const fetchModels = async () => {
     const baseURL = draft.ai?.baseURL?.trim();
     if (!baseURL) {
@@ -187,6 +214,7 @@ export function SettingsDialog({
     setSaving(true);
     try {
       if (logDirty && logSettings) await api.setTerminalLogSettings(logSettings);
+      await api.setLocalTerminalSettings({ shell: draft.terminal?.shell || '' });
       await onSave(draft);
       onClose();
     } catch (error) {
@@ -227,6 +255,10 @@ export function SettingsDialog({
               AI 智能体
             </TabsTrigger>
             <TabsTrigger value="logs" className="flex-1 gap-2">日志</TabsTrigger>
+            <TabsTrigger value="shortcuts" className="flex-1 gap-2">
+              <Keyboard className="h-4 w-4" />
+              快捷键
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="logs" className="mt-4 space-y-4">
@@ -246,6 +278,24 @@ export function SettingsDialog({
                 <p className="text-xs text-muted-foreground">日志会保存输入内容，可能包含命令中或交互输入的密码等敏感信息。</p>
               </div>
             </> : <p className="text-sm text-muted-foreground">{logError ? '无法加载日志设置。' : '正在加载日志设置…'}</p>}
+          </TabsContent>
+
+          <TabsContent value="shortcuts" className="mt-4 space-y-4">
+            <SettingRow label="克隆标签页" description="复制当前连接并打开新的标签页。">
+              <ShortcutRecorder
+                value={draft.shortcuts?.cloneTab || 'CmdOrCtrl+Shift+D'}
+                disabled={saving}
+                onChange={value => updateShortcutDraft('cloneTab', value)}
+              />
+            </SettingRow>
+            <SettingRow label="关闭标签页" description="关闭当前活动标签页。">
+              <ShortcutRecorder
+                value={draft.shortcuts?.closeTab || 'CmdOrCtrl+W'}
+                disabled={saving}
+                onChange={value => updateShortcutDraft('closeTab', value)}
+              />
+            </SettingRow>
+            <p className="text-xs text-muted-foreground">快捷键中使用 ⌘（Command）+ 组合的按键需要在按下时保持按住修饰键。</p>
           </TabsContent>
 
           <TabsContent value="appearance" className="mt-4 space-y-4">
@@ -302,6 +352,60 @@ export function SettingsDialog({
           </TabsContent>
 
           <TabsContent value="terminal" className="mt-4 space-y-4">
+            <div className="space-y-2 rounded-md border border-border/60 p-3">
+              <div>
+                <p className="text-sm font-medium">本地终端</p>
+                <p className="text-xs text-muted-foreground">新建本地终端时启动此程序。下拉列表会自动探测当前系统已安装的主要终端，也可以手动输入路径或命令名。</p>
+              </div>
+              <div className="flex gap-2">
+                <Select
+                  value={localTerminals.some(item => item.path === draft.terminal?.shell) ? draft.terminal.shell : undefined}
+                  onValueChange={value => updateTerminalDraft('shell', value)}
+                  disabled={saving || localTerminals.length === 0}
+                >
+                  <SelectTrigger className="min-w-0 flex-1"><SelectValue placeholder={localTerminals.length ? '选择已探测的终端' : '未探测到终端'} /></SelectTrigger>
+                  <SelectContent>
+                    {localTerminals.map(item => <SelectItem key={item.path} value={item.path}>{item.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Input
+                  className="min-w-0 flex-[1.4]"
+                  value={draft.terminal?.shell || ''}
+                  disabled={saving}
+                  onChange={event => updateTerminalDraft('shell', event.target.value)}
+                  placeholder="例如 /bin/zsh、fish 或 pwsh.exe"
+                  aria-label="本地终端路径"
+                />
+              </div>
+              {localTerminalError && <p className="text-xs text-destructive">无法探测本地终端：{localTerminalError}</p>}
+            </div>
+            <div className="space-y-2 rounded-md border border-border/60 p-3">
+              <div>
+                <p className="text-sm font-medium">终端字体</p>
+                <p className="text-xs text-muted-foreground">同时应用于 SSH 与本地终端。选择已安装字体，或直接输入字体族名称；留空则使用内置等宽字体回退列表。</p>
+              </div>
+              <div className="flex gap-2">
+                <Select
+                  value={terminalFonts.includes(draft.terminal?.fontFamily) ? draft.terminal.fontFamily : undefined}
+                  onValueChange={value => updateTerminalDraft('fontFamily', value)}
+                  disabled={saving || terminalFonts.length === 0}
+                >
+                  <SelectTrigger className="min-w-0 flex-1"><SelectValue placeholder={terminalFonts.length ? '选择已安装字体' : '未探测到字体'} /></SelectTrigger>
+                  <SelectContent className="max-h-64">
+                    {terminalFonts.map(font => <SelectItem key={font} value={font}>{font}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Input
+                  className="min-w-0 flex-[1.4]"
+                  value={draft.terminal?.fontFamily || ''}
+                  disabled={saving}
+                  onChange={event => updateTerminalDraft('fontFamily', event.target.value)}
+                  placeholder="例如 JetBrains Mono"
+                  aria-label="终端字体"
+                />
+              </div>
+              {terminalFontsError && <p className="text-xs text-destructive">无法读取系统字体：{terminalFontsError}</p>}
+            </div>
             <SettingRow label="字体大小" description="调整终端文字大小。">
               <Select value={String(draft.terminal.fontSize)} onValueChange={value => updateTerminalDraft('fontSize', Number(value))}>
                 <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
@@ -498,5 +602,41 @@ function SettingRow({ label, description, children }) {
       </div>
       <div className="shrink-0">{children}</div>
     </div>
+  );
+}
+
+function ShortcutRecorder({ value, onChange, disabled }) {
+  const [recording, setRecording] = useState(false);
+
+  useEffect(() => {
+    if (!recording) return undefined;
+    const onKeyDown = event => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === 'Escape') {
+        setRecording(false);
+        return;
+      }
+      const next = captureShortcut(event);
+      if (next) {
+        onChange(next);
+        setRecording(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [recording, onChange]);
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="min-w-28 font-mono text-xs"
+      disabled={disabled}
+      onClick={() => setRecording(previous => !previous)}
+      aria-label="录制快捷键"
+    >
+      {recording ? '按下组合键…' : formatShortcut(value)}
+    </Button>
   );
 }

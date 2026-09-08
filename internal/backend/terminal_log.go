@@ -60,6 +60,9 @@ const (
 	maxTerminalLogViewBytes     = 4 * 1024 * 1024
 	maxTerminalOutputBlockBytes = 64 * 1024
 	terminalOutputFlushDelay    = 200 * time.Millisecond
+	// terminalLogLocalID 是所有本地终端共享的日志目录连接 ID，
+	// 让本地会话日志积累在同一个目录下，日志列表可看到历史记录。
+	terminalLogLocalID = "local"
 )
 
 // TerminalLogFile 是日志列表中供界面选择的安全文件描述。
@@ -229,6 +232,10 @@ func readTerminalLogIn(root, connectionID, name string) (TerminalLogContent, err
 }
 
 func (a *App) newTerminalLogger(tabID string, config ConnectionConfig) (*terminalLogger, error) {
+	return a.newTerminalLoggerFor(tabID, terminalLogConnectionID(tabID, config), config)
+}
+
+func (a *App) newTerminalLoggerFor(tabID, connectionID string, config ConnectionConfig) (*terminalLogger, error) {
 	settings, err := a.GetTerminalLogSettings()
 	if err != nil {
 		return nil, err
@@ -242,7 +249,7 @@ func (a *App) newTerminalLogger(tabID string, config ConnectionConfig) (*termina
 	}
 	startedAt := time.Now().UTC()
 	sessionID := id.String()
-	path, err := terminalLogPathIn(settings.SavePath, terminalLogConnectionID(tabID, config), sessionID, startedAt)
+	path, err := terminalLogPathIn(settings.SavePath, connectionID, sessionID, startedAt)
 	if err != nil {
 		return nil, err
 	}

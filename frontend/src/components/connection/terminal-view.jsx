@@ -4,6 +4,26 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { ClipboardGetText } from '../../../wailsjs/runtime/runtime';
 
+const defaultTerminalFontFamily = [
+  '"FiraCode Nerd Font Mono"',
+  '"JetBrainsMono Nerd Font Mono"',
+  '"Hack Nerd Font Mono"',
+  '"Agave Nerd Font Mono"',
+  'Menlo',
+  'Consolas',
+  '"Courier New"',
+  '"Apple Symbols"',
+  '"Apple Color Emoji"',
+  '"Segoe UI Emoji"',
+  'monospace',
+].join(', ');
+
+function terminalFontFamily(fontFamily) {
+  const selected = String(fontFamily || '').trim();
+  if (!selected) return defaultTerminalFontFamily;
+  return `"${selected.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}", ${defaultTerminalFontFamily}`;
+}
+
 export function TerminalView({ tab, active = true, onSend, onResize, onFocus, onTermReady, onReconnect, terminalSettings }) {
   const hostRef = useRef(null);
   const termRef = useRef(null);
@@ -42,7 +62,8 @@ export function TerminalView({ tab, active = true, onSend, onResize, onFocus, on
       red: '#d8868b',
       green: '#8ea97b',
       yellow: '#cbb46f',
-      blue: '#89a5c9',
+      // 使用低饱和蓝灰，避免高对比背景下蓝色过于跳脱。
+      blue: '#9aaabd',
       magenta: '#bf9bc0',
       cyan: '#7fb5b0',
       white: '#c2c7c4',
@@ -50,7 +71,7 @@ export function TerminalView({ tab, active = true, onSend, onResize, onFocus, on
       brightRed: '#e39a9e',
       brightGreen: '#a3bd90',
       brightYellow: '#d9c48d',
-      brightBlue: '#9cb8d8',
+      brightBlue: '#b2c0cd',
       brightMagenta: '#cdafcd',
       brightCyan: '#94c6c1',
       brightWhite: '#e6e9e4',
@@ -59,20 +80,11 @@ export function TerminalView({ tab, active = true, onSend, onResize, onFocus, on
       cursorBlink: terminalSettings?.cursorBlink ?? true,
       // Nerd Font Mono 覆盖提示符图标与 powerline/emoji 类符号，缺失时逐级
       // 回退到系统符号与 emoji 字体，避免 canvas 渲染画方框。
-      fontFamily: [
-        '"FiraCode Nerd Font Mono"',
-        '"JetBrainsMono Nerd Font Mono"',
-        '"Hack Nerd Font Mono"',
-        '"Agave Nerd Font Mono"',
-        'Menlo',
-        'Consolas',
-        '"Courier New"',
-        '"Apple Symbols"',
-        '"Apple Color Emoji"',
-        '"Segoe UI Emoji"',
-        'monospace',
-      ].join(', '),
+      fontFamily: terminalFontFamily(terminalSettings?.fontFamily),
       fontSize: terminalSettings?.fontSize ?? 13,
+      // 某些 shell 组合 ANSI 前景色和背景色时（例如绿色文字配绿色底），
+      // 由 xterm 自动调整前景色以满足 WCAG AA 的可读性对比度。
+      minimumContrastRatio: 4.5,
       // 画布背景完全透明：透明度由外层终端容器统一承担，文字保持不透明。
       theme: {
         ...terminalTheme,
@@ -196,10 +208,11 @@ export function TerminalView({ tab, active = true, onSend, onResize, onFocus, on
     const term = termRef.current;
     if (!term || !terminalSettings) return;
     term.options.cursorBlink = terminalSettings.cursorBlink;
+    term.options.fontFamily = terminalFontFamily(terminalSettings.fontFamily);
     term.options.fontSize = terminalSettings.fontSize;
     term.options.scrollback = terminalSettings.scrollback;
     scheduleFitRef.current?.();
-  }, [terminalSettings?.cursorBlink, terminalSettings?.fontSize, terminalSettings?.scrollback]);
+  }, [terminalSettings?.cursorBlink, terminalSettings?.fontFamily, terminalSettings?.fontSize, terminalSettings?.scrollback]);
 
   useEffect(() => {
     if (tab.buffer && termRef.current) {

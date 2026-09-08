@@ -6,12 +6,26 @@ import (
 )
 
 func TestResolveLocalShell(t *testing.T) {
-	shell, err := resolveLocalShell()
+	shell, err := resolveLocalShell("")
 	if err != nil {
 		t.Fatalf("resolveLocalShell() error = %v", err)
 	}
 	if !strings.HasPrefix(shell, "/") {
 		t.Fatalf("shell path = %q, want absolute path", shell)
+	}
+}
+
+func TestResolveConfiguredLocalShell(t *testing.T) {
+	available := availableLocalTerminals()
+	if len(available) == 0 {
+		t.Skip("no local terminal is available on this test host")
+	}
+	shell, err := resolveLocalShell(available[0].Path)
+	if err != nil {
+		t.Fatalf("resolveLocalShell(%q) error = %v", available[0].Path, err)
+	}
+	if shell != available[0].Path {
+		t.Fatalf("shell path = %q, want %q", shell, available[0].Path)
 	}
 }
 

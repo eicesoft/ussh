@@ -13,9 +13,10 @@ import (
 
 // appFileConfig 保存应用级持久配置。
 type appFileConfig struct {
-	GpuAcceleration *bool                `json:"gpuAcceleration,omitempty"`
-	BackdropType    string               `json:"backdropType,omitempty"`
-	TerminalLog     *TerminalLogSettings `json:"terminalLog,omitempty"`
+	GpuAcceleration *bool                  `json:"gpuAcceleration,omitempty"`
+	BackdropType    string                 `json:"backdropType,omitempty"`
+	TerminalLog     *TerminalLogSettings   `json:"terminalLog,omitempty"`
+	LocalTerminal   *LocalTerminalSettings `json:"localTerminal,omitempty"`
 }
 
 var appConfigMu sync.Mutex
@@ -24,6 +25,48 @@ type TerminalLogSettings struct {
 	Enabled     bool   `json:"enabled"`
 	SavePath    string `json:"savePath"`
 	DefaultPath string `json:"defaultPath"`
+}
+
+// LocalTerminalSettings 保存新建本地终端时使用的可执行文件。Shell 可为系统
+// 探测到的路径，也可为用户手动填写的任意可执行文件路径或命令名。
+type LocalTerminalSettings struct {
+	Shell string `json:"shell"`
+}
+
+// LocalTerminalOption 是供设置界面下拉选择的一个本机终端。
+type LocalTerminalOption struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
+func (a *App) GetLocalTerminalSettings() (LocalTerminalSettings, error) {
+	appConfigMu.Lock()
+	defer appConfigMu.Unlock()
+	if saved := readAppConfig().LocalTerminal; saved != nil && strings.TrimSpace(saved.Shell) != "" {
+		return LocalTerminalSettings{Shell: strings.TrimSpace(saved.Shell)}, nil
+	}
+	shell, err := resolveLocalShell("")
+	if err != nil {
+		return LocalTerminalSettings{}, err
+	}
+	return LocalTerminalSettings{Shell: shell}, nil
+}
+
+func (a *App) SetLocalTerminalSettings(settings LocalTerminalSettings) error {
+	shell, err := resolveLocalShell(settings.Shell)
+	if err != nil {
+		return err
+	}
+	appConfigMu.Lock()
+	defer appConfigMu.Unlock()
+	cfg := readAppConfig()
+	cfg.LocalTerminal = &LocalTerminalSettings{Shell: shell}
+	return writeAppConfig(cfg)
+}
+
+// ListAvailableLocalTerminals 返回当前系统已安装的常用交互终端。
+func (a *App) ListAvailableLocalTerminals() []LocalTerminalOption {
+	return availableLocalTerminals()
 }
 
 func (a *App) GetTerminalLogSettings() (TerminalLogSettings, error) {

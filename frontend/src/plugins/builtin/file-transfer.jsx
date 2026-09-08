@@ -162,6 +162,26 @@ function UploadProgressPanel({ task, onClose }) {
   );
 }
 
+function DownloadProgressPanel({ task, onClose }) {
+  if (!task) return null;
+  const progress = task.totalBytes > 0
+    ? Math.round((task.downloadedBytes / task.totalBytes) * 100)
+    : task.total > 0 ? Math.round((task.completed / task.total) * 100) : 0;
+  const width = task.status === 'completed' ? 100 : Math.max(6, progress);
+  const status = task.status === 'downloading' ? `${task.completed}/${task.total} 项处理中` : task.status === 'completed' ? '下载完成' : '下载失败';
+  return (
+    <div className="shrink-0 bg-background/80 px-3 py-2 text-[10px]">
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <div className="min-w-0 truncate font-medium">下载进度 · {status}</div>
+        <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={onClose} title="关闭进度查看" aria-label="关闭进度查看"><X className="h-3 w-3" /></Button>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className={cn('h-full rounded-full bg-primary transition-[width] duration-200', task.status === 'failed' && 'bg-destructive')} style={{ width: `${width}%` }} /></div>
+      <div className="mt-1 flex items-center justify-between gap-2 text-muted-foreground"><span className="min-w-0 truncate">{task.currentName ? `下载中：${task.currentName}` : '准备下载'}</span><span className="shrink-0">{formatSize(task.downloadedBytes)} / {formatSize(task.totalBytes)}</span></div>
+      {task.error && <div className="mt-1 truncate text-red-500">{task.error}</div>}
+    </div>
+  );
+}
+
 function UploadConflictDialog({ conflict, onChoice }) {
   return (
     <Dialog open={conflict !== null} onOpenChange={open => { if (!open) onChoice('cancel'); }}>
@@ -253,8 +273,13 @@ async function collectFilesFromDrop(items) {
   const queue = [];
 
   for (const item of items) {
-    const entry = item.webkitGetAsEntry();
-    if (entry) queue.push({ entry, parentPath: '' });
+    const entry = (item.getAsEntry && item.getAsEntry()) || (item.webkitGetAsEntry && item.webkitGetAsEntry());
+    if (entry) {
+      queue.push({ entry, parentPath: '' });
+    } else {
+      const file = item.getAsFile && item.getAsFile();
+      if (file) files.push(file);
+    }
   }
 
   while (queue.length > 0) {
@@ -269,11 +294,15 @@ async function collectFilesFromDrop(items) {
       files.push(file);
     } else if (entry.isDirectory) {
       const reader = entry.createReader();
-      const entries = await new Promise(resolve => reader.readEntries(resolve));
-      const newParent = parentPath ? `${parentPath}/${entry.name}` : entry.name;
-      for (const child of entries) {
-        queue.push({ entry: child, parentPath: newParent });
-      }
+      // readEntries 每次最多返回一批，必须循环读到空数组，否则大目录会截断。
+      let children;
+      do {
+        children = await new Promise(resolve => reader.readEntries(resolve));
+        const newParent = parentPath ? `${parentPath}/${entry.name}` : entry.name;
+        for (const child of children) {
+          queue.push({ entry: child, parentPath: newParent });
+        }
+      } while (children.length > 0);
     }
   }
   return files;
@@ -287,7 +316,7 @@ function FileBrowser() {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [selected, setSelected] = useState(null);
+  const [selectedPaths, setSelectedPaths] = useState([]);
   const [renaming, setRenaming] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [contextMenu, setContextMenu] = useState(null);
@@ -295,9 +324,11 @@ function FileBrowser() {
   const [uploading, setUploading] = useState(false);
   const [uploadTask, setUploadTask] = useState(null);
   const [uploadPanelOpen, setUploadPanelOpen] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadTask, setDownloadTask] = useState(null);
+  const [downloadPanelOpen, setDownloadPanelOpen] = useState(false);
   const [uploadConflict, setUploadConflict] = useState(null);
   const [dragOver, setDragOver] = useState(false);
-  const fileInputRef = useRef(null);
   const folderInputRef = useRef(null);
   const conflictResolverRef = useRef(null);
 
@@ -328,7 +359,7 @@ function FileBrowser() {
     if (activeTab?.status === 'connected') {
       setCwd('/');
       setPathInput('/');
-      setSelected(null);
+      setSelectedPaths([]);
       setEntries([]);
       setLoading(true);
       setError('');
@@ -348,7 +379,7 @@ function FileBrowser() {
     }
     setCwd(target);
     setPathInput(target);
-    setSelected(null);
+    setSelectedPaths([]);
     return true;
   }, [loadDir, showToast]);
 
@@ -369,7 +400,7 @@ function FileBrowser() {
           variant="ghost"
           size="icon"
           className="h-7 w-7"
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => api.pickUploadFiles().then(files => uploadFiles(files)).catch(error => showToast(`选择文件失败：${error}`))}
           disabled={uploading}
           title="上传文件"
         >
@@ -385,11 +416,21 @@ function FileBrowser() {
         >
           <FolderUp className="h-3.5 w-3.5" />
         </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onClick={() => handleDownload(entries.filter(entry => selectedPaths.includes(entry.path)))}
+          disabled={uploading || downloading || selectedPaths.length === 0}
+          title={`下载所选 ${selectedPaths.length} 项`}
+        >
+          <Download className="h-3.5 w-3.5" />
+        </Button>
       </div>,
     );
 
     return () => setHeaderActions(null);
-  }, [connected, cwd, fileInputRef, loading, navigateTo, setHeaderActions, uploading]);
+  }, [api, connected, cwd, downloading, loading, navigateTo, selectedPaths, setHeaderActions, showToast, uploading]);
 
   const chooseConflictAction = useCallback((action) => {
     conflictResolverRef.current?.(action);
@@ -429,7 +470,7 @@ function FileBrowser() {
 
     try {
       for (const [index, file] of files.entries()) {
-        const relativePath = file.webkitRelativePath || file.name;
+        const relativePath = file.webkitRelativePath || file.relativePath || file.name;
         const parts = relativePath.split('/').filter(Boolean);
         const filename = parts.pop();
         const remoteDir = joinRemotePath(cwd, ...parts);
@@ -477,10 +518,15 @@ function FileBrowser() {
         if (parts.length > 0) {
           await api.sftpMkdir(activeTab.id, remoteDir);
         }
-        setUploadTask(task => ({ ...task, currentAction: '读取中' }));
-        const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
         setUploadTask(task => ({ ...task, currentAction: '上传中' }));
-        await api.sftpWrite(activeTab.id, remotePath, bytes);
+        if (file.path) {
+          await api.sftpUpload(activeTab.id, file.path, remotePath);
+        } else {
+          setUploadTask(task => ({ ...task, currentAction: '读取中' }));
+          const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
+          setUploadTask(task => ({ ...task, currentAction: '上传中' }));
+          await api.sftpWrite(activeTab.id, remotePath, bytes);
+        }
         uploaded += 1;
         uploadedBytes += file.size;
         setUploadTask(task => ({
@@ -512,6 +558,21 @@ function FileBrowser() {
     }
   };
 
+  // Wails 原生层接管文件落下后，DOM onDrop 不会触发；在此同步清除拖放提示。
+  useEffect(() => {
+    if (!connected) return undefined;
+    return api.onLocalFilesDropped(files => {
+      setDragOver(false);
+      if (Array.isArray(files) && files.length > 0) uploadFiles(files);
+    });
+  }, [api, connected, uploadFiles]);
+
+  useEffect(() => api.onSftpDownloadProgress(progress => {
+    setDownloadTask(task => task?.currentPath === progress.remotePath
+      ? { ...task, downloadedBytes: progress.downloadedBytes, totalBytes: progress.totalBytes }
+      : task);
+  }), [api]);
+
   const handleFileInputChange = async (e) => {
     await uploadFiles(e.target.files);
     e.target.value = '';
@@ -541,14 +602,36 @@ function FileBrowser() {
     document.body.removeChild(ta);
   };
 
-  const handleDownload = async (entry) => {
-    const localPath = await api.pickSavePath(entry.name);
-    if (!localPath) return;
+  const handleDownload = async (downloadEntries) => {
+    const items = Array.from(downloadEntries || []);
+    if (items.length === 0) return;
+    let downloads;
+    if (items.length === 1 && !items[0].isDir) {
+      const localPath = await api.pickSavePath(items[0].name);
+      if (!localPath) return;
+      downloads = [{ entry: items[0], localPath }];
+    } else {
+      const localDirectory = await api.pickDownloadDirectory();
+      if (!localDirectory) return;
+      downloads = items.map(entry => ({ entry, localPath: `${localDirectory}/${entry.name}` }));
+    }
+    setDownloading(true);
+    setDownloadPanelOpen(true);
+    setDownloadTask({ total: downloads.length, completed: 0, downloadedBytes: 0, totalBytes: 0, currentName: '', currentPath: '', status: 'downloading', error: '' });
     try {
-      const size = await api.sftpDownload(activeTab.id, entry.path, localPath);
-      showToast(`已下载 ${formatSize(size)}`);
+      let totalSize = 0;
+      for (const [index, download] of downloads.entries()) {
+        setDownloadTask(task => ({ ...task, currentName: download.entry.name, currentPath: download.entry.path, completed: index, downloadedBytes: 0, totalBytes: 0 }));
+        totalSize += await api.sftpDownload(activeTab.id, download.entry.path, download.localPath);
+        setDownloadTask(task => ({ ...task, completed: index + 1, downloadedBytes: totalSize }));
+      }
+      showToast(`已下载 ${items.length} 项 · ${formatSize(totalSize)}`);
+      setDownloadTask(task => ({ ...task, status: 'completed', completed: downloads.length, downloadedBytes: totalSize }));
     } catch (e) {
       showToast(`下载失败：${e}`);
+      setDownloadTask(task => ({ ...task, status: 'failed', error: String(e) }));
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -573,7 +656,7 @@ function FileBrowser() {
       await api.sftpRemove(activeTab.id, confirmDelete.path);
       showToast('已删除');
       setConfirmDelete(null);
-      setSelected(null);
+      setSelectedPaths([]);
       loadDir(cwd);
     } catch (e) {
       showToast(`删除失败：${e}`);
@@ -583,20 +666,22 @@ function FileBrowser() {
   const handleContextMenu = (e, entry) => {
     e.preventDefault();
     e.stopPropagation();
-    setSelected(entry?.path || null);
+    if (entry) {
+      setSelectedPaths(paths => paths.includes(entry.path) ? paths : [entry.path]);
+    } else {
+      setSelectedPaths([]);
+    }
     setContextMenu({ x: e.clientX, y: e.clientY, entry: entry || null });
   };
 
   const contextMenuItems = contextMenu?.entry ? [
     { icon: <Copy className="h-3.5 w-3.5" />, label: '复制路径', onSelect: () => handleCopyPath(contextMenu.entry) },
-    ...(contextMenu.entry.isDir ? [] : [
-      { icon: <Download className="h-3.5 w-3.5" />, label: '下载', onSelect: () => handleDownload(contextMenu.entry) },
-    ]),
+    { icon: <Download className="h-3.5 w-3.5" />, label: selectedPaths.length > 1 ? `下载所选 ${selectedPaths.length} 项` : '下载', onSelect: () => handleDownload(entries.filter(entry => selectedPaths.includes(entry.path))) },
     { icon: <Edit3 className="h-3.5 w-3.5" />, label: '重命名', onSelect: () => setRenaming(contextMenu.entry) },
     { sep: true },
     { icon: <Trash2 className="h-3.5 w-3.5" />, label: '删除', onSelect: () => setConfirmDelete(contextMenu.entry) },
   ] : [
-    { icon: <FileUp className="h-3.5 w-3.5" />, label: '上传文件', disabled: uploading, onSelect: () => fileInputRef.current?.click() },
+    { icon: <FileUp className="h-3.5 w-3.5" />, label: '上传文件', disabled: uploading, onSelect: () => api.pickUploadFiles().then(files => uploadFiles(files)).catch(error => showToast(`选择文件失败：${error}`)) },
     { icon: <FolderUp className="h-3.5 w-3.5" />, label: '上传文件夹', disabled: uploading, onSelect: () => folderInputRef.current?.click() },
     { sep: true },
     { icon: <RefreshCw className="h-3.5 w-3.5" />, label: '刷新', disabled: loading, onSelect: refresh },
@@ -640,12 +725,6 @@ function FileBrowser() {
           </Button>
         </div>
         <div className="mt-1">
-          <input
-            ref={fileInputRef}
-            type="file"
-            className="hidden"
-            onChange={handleFileInputChange}
-          />
           <input
             ref={folderInputRef}
             type="file"
@@ -694,9 +773,19 @@ function FileBrowser() {
           e.preventDefault();
           e.stopPropagation();
           setDragOver(false);
-          if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
-            const files = await collectFilesFromDrop(e.dataTransfer.items);
+          // WKWebView 中 drop 事件的 dataTransfer.items 为空（WebKit bug #167972），
+          // 需回退到 dataTransfer.files，否则拖动上传无反应。
+          const items = e.dataTransfer?.items ? Array.from(e.dataTransfer.items) : [];
+          if (items.length > 0) {
+            const files = await collectFilesFromDrop(items);
             if (files.length > 0) uploadFiles(files);
+            return;
+          }
+          const files = Array.from(e.dataTransfer?.files || []);
+          if (files.length > 0) {
+            uploadFiles(files);
+          } else {
+            showToast('未识别到拖入的文件');
           }
         }}
       >
@@ -721,11 +810,17 @@ function FileBrowser() {
                 <div
                   className={cn(
                     'grid cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs hover:bg-accent',
-                    selected === entry.path && 'bg-accent',
+                    selectedPaths.includes(entry.path) && 'bg-accent',
                   )}
                   style={{ gridTemplateColumns: COLUMNS.map(c => c.width).join(' ') }}
-                  onClick={() => {
-                    setSelected(entry.path);
+                  onClick={(e) => {
+                    if (e.metaKey || e.ctrlKey) {
+                      setSelectedPaths(paths => paths.includes(entry.path)
+                        ? paths.filter(path => path !== entry.path)
+                        : [...paths, entry.path]);
+                    } else {
+                      setSelectedPaths([entry.path]);
+                    }
                   }}
                   onDoubleClick={() => {
                     if (entry.isDir) navigateTo(entry.path);
@@ -759,6 +854,9 @@ function FileBrowser() {
       {uploadPanelOpen && (
         <UploadProgressPanel task={uploadTask} onClose={() => setUploadPanelOpen(false)} />
       )}
+      {downloadPanelOpen && (
+        <DownloadProgressPanel task={downloadTask} onClose={() => setDownloadPanelOpen(false)} />
+      )}
 
       {/* 底部状态栏 */}
       <div className="shrink-0 px-3 py-1 text-[10px] text-muted-foreground">
@@ -771,6 +869,15 @@ function FileBrowser() {
             onClick={() => setUploadPanelOpen(true)}
           >
             查看上传进度
+          </button>
+        )}
+        {downloadTask && !downloadPanelOpen && (
+          <button
+            type="button"
+            className="ml-2 text-primary hover:underline"
+            onClick={() => setDownloadPanelOpen(true)}
+          >
+            查看下载进度
           </button>
         )}
       </div>

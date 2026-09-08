@@ -1,16 +1,16 @@
 export namespace backend {
-	
+
 	export class ToolCall {
 	    index?: number;
 	    id?: string;
 	    type?: string;
 	    // Go type: struct { Name string "json:\"name,omitempty\""; Arguments string "json:\"arguments,omitempty\"" }
 	    function?: any;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new ToolCall(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.index = source["index"];
@@ -18,7 +18,7 @@ export namespace backend {
 	        this.type = source["type"];
 	        this.function = this.convertValues(source["function"], Object);
 	    }
-	
+
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -43,11 +43,11 @@ export namespace backend {
 	    tool_call_id?: string;
 	    tool_calls?: ToolCall[];
 	    name?: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new AIChatMessage(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.role = source["role"];
@@ -56,7 +56,7 @@ export namespace backend {
 	        this.tool_calls = this.convertValues(source["tool_calls"], ToolCall);
 	        this.name = source["name"];
 	    }
-	
+
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -85,11 +85,11 @@ export namespace backend {
 	    shell: string;
 	    cwd: string;
 	    uptime: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new AgentContext(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.host = source["host"];
@@ -108,11 +108,11 @@ export namespace backend {
 	    useTools: boolean;
 	    maxSteps: number;
 	    commandTimeoutSec: number;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new AgentOptions(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.autoApproveReadonly = source["autoApproveReadonly"];
@@ -130,11 +130,11 @@ export namespace backend {
 	    messages: AIChatMessage[];
 	    context: AgentContext;
 	    options: AgentOptions;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new AgentRequest(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.requestId = source["requestId"];
@@ -146,7 +146,7 @@ export namespace backend {
 	        this.context = this.convertValues(source["context"], AgentContext);
 	        this.options = this.convertValues(source["options"], AgentOptions);
 	    }
-	
+
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -177,11 +177,11 @@ export namespace backend {
 	    savedNodeId: number;
 	    keepaliveEnabled: boolean;
 	    keepaliveInterval: number;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new ConnectionConfig(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.host = source["host"];
@@ -202,11 +202,11 @@ export namespace backend {
 	    hasPrivateKey: boolean;
 	    hasPassphrase: boolean;
 	    hasKeyFile: boolean;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new CredentialView(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.hasPassword = source["hasPassword"];
@@ -215,16 +215,60 @@ export namespace backend {
 	        this.hasKeyFile = source["hasKeyFile"];
 	    }
 	}
+	export class LocalTerminalOption {
+	    name: string;
+	    path: string;
+
+	    static createFrom(source: any = {}) {
+	        return new LocalTerminalOption(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	    }
+	}
+	export class LocalTerminalSettings {
+	    shell: string;
+
+	    static createFrom(source: any = {}) {
+	        return new LocalTerminalSettings(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.shell = source["shell"];
+	    }
+	}
+	export class LocalUploadFile {
+	    path: string;
+	    name: string;
+	    relativePath: string;
+	    size: number;
+
+	    static createFrom(source: any = {}) {
+	        return new LocalUploadFile(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.name = source["name"];
+	        this.relativePath = source["relativePath"];
+	        this.size = source["size"];
+	    }
+	}
 	export class RemoteCommandResult {
 	    output: string;
 	    exitCode: number;
 	    timedOut: boolean;
 	    durationMs: number;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new RemoteCommandResult(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.output = source["output"];
@@ -238,11 +282,11 @@ export namespace backend {
 	    privateKey?: string;
 	    passphrase?: string;
 	    keyFile?: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new SavedCredential(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.password = source["password"];
@@ -264,11 +308,11 @@ export namespace backend {
 	    sortOrder: number;
 	    keepaliveEnabled: boolean;
 	    keepaliveInterval: number;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new SavedNode(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -293,11 +337,11 @@ export namespace backend {
 	    // Go type: time
 	    modTime: any;
 	    mode: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new SftpEntry(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -307,7 +351,7 @@ export namespace backend {
 	        this.modTime = this.convertValues(source["modTime"], null);
 	        this.mode = source["mode"];
 	    }
-	
+
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -330,11 +374,11 @@ export namespace backend {
 	    content: number[];
 	    size: number;
 	    filename: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new SftpFileInfo(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.content = source["content"];
@@ -355,11 +399,11 @@ export namespace backend {
 	    shell: string;
 	    cwd: string;
 	    uptime: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new SystemInfo(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.host = source["host"];
@@ -380,11 +424,11 @@ export namespace backend {
 	    name: string;
 	    content: string;
 	    truncated: boolean;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new TerminalLogContent(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -397,18 +441,18 @@ export namespace backend {
 	    size: number;
 	    // Go type: time
 	    modifiedAt: any;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new TerminalLogFile(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.size = source["size"];
 	        this.modifiedAt = this.convertValues(source["modifiedAt"], null);
 	    }
-	
+
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -431,11 +475,11 @@ export namespace backend {
 	    enabled: boolean;
 	    savePath: string;
 	    defaultPath: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new TerminalLogSettings(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.enabled = source["enabled"];
@@ -446,11 +490,11 @@ export namespace backend {
 	export class TerminalSize {
 	    columns: number;
 	    rows: number;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new TerminalSize(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.columns = source["columns"];

@@ -28,6 +28,22 @@ export const api = {
     if (!appApi()?.PickTerminalLogDirectory) throw new Error('目录选择不可用。');
     return appApi().PickTerminalLogDirectory();
   },
+  async getLocalTerminalSettings() {
+    if (!appApi()?.GetLocalTerminalSettings) throw new Error('本地终端设置不可用，请在新版 uSSH 应用中打开。');
+    return appApi().GetLocalTerminalSettings();
+  },
+  async setLocalTerminalSettings(settings) {
+    if (!appApi()?.SetLocalTerminalSettings) throw new Error('本地终端设置不可用。');
+    return appApi().SetLocalTerminalSettings(settings);
+  },
+  async listAvailableLocalTerminals() {
+    if (!appApi()?.ListAvailableLocalTerminals) throw new Error('本地终端探测不可用，请在新版 uSSH 应用中打开。');
+    return appApi().ListAvailableLocalTerminals();
+  },
+  async listAvailableTerminalFonts() {
+    if (!appApi()?.ListAvailableTerminalFonts) throw new Error('字体探测不可用，请在新版 uSSH 应用中打开。');
+    return appApi().ListAvailableTerminalFonts();
+  },
   async connect(tabId, payload, size) {
     return appApi()?.Connect(tabId, payload, size);
   },
@@ -112,6 +128,12 @@ export const api = {
   async sftpWrite(tabId, filePath, content) {
     return appApi()?.SftpWrite(tabId, filePath, content);
   },
+  async sftpUpload(tabId, localPath, remotePath) {
+    return appApi()?.SftpUpload(tabId, localPath, remotePath);
+  },
+  async pickUploadFiles() {
+    return appApi()?.PickUploadFiles();
+  },
   async sftpMkdir(tabId, dirPath) {
     return appApi()?.SftpMkdir(tabId, dirPath);
   },
@@ -129,6 +151,9 @@ export const api = {
   },
   async pickSavePath(defaultName) {
     return appApi()?.PickSavePath(defaultName);
+  },
+  async pickDownloadDirectory() {
+    return appApi()?.PickDownloadDirectory();
   },
   async fetchModels(baseURL, apiKey) {
     return appApi()?.FetchModels(baseURL, apiKey);
@@ -149,6 +174,12 @@ export const api = {
   },
   onAIChatError(handler) {
     return onAIChatError(handler);
+  },
+  onLocalFilesDropped(handler) {
+    return onLocalFilesDropped(handler);
+  },
+  onSftpDownloadProgress(handler) {
+    return onSftpDownloadProgress(handler);
   },
   async startAgent(request) {
     const app = appApi();
@@ -225,6 +256,17 @@ export function onAIChatDone(handler) {
 export function onAIChatError(handler) {
   EventsOn('ai-chat-error', handler);
   return () => EventsOff('ai-chat-error', handler);
+}
+
+// 原生层（macOS Finder 拖放）捕获到本地文件后推送的事件。
+export function onLocalFilesDropped(handler) {
+  EventsOn('local-files-dropped', handler);
+  return () => EventsOff('local-files-dropped', handler);
+}
+
+export function onSftpDownloadProgress(handler) {
+  EventsOn('sftp-download-progress', handler);
+  return () => EventsOff('sftp-download-progress', handler);
 }
 
 // 智能体事件：Go 端循环推送，前端只负责渲染与授权回应。

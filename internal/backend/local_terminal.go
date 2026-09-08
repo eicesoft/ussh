@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -21,13 +22,10 @@ type localSession struct {
 }
 
 // StartLocalTerminal 在本机启动一个交互式 shell 并绑定到 tabId。
-// Shell 选择用户默认 SHELL，退化到 zsh / bash / sh；工作目录为用户主目录。
+// Shell 使用软件设置中选定的终端；工作目录为用户主目录。
 func (a *App) StartLocalTerminal(tabId string, size TerminalSize) (string, error) {
 	if strings.TrimSpace(tabId) == "" {
 		return "", fmt.Errorf("tabId 不能为空")
-	}
-	if runtime.GOOS == "windows" {
-		return "", fmt.Errorf("当前平台暂不支持本地终端")
 	}
 	a.mu.Lock()
 	_, sshExists := a.connections[tabId]
@@ -41,10 +39,15 @@ func (a *App) StartLocalTerminal(tabId string, size TerminalSize) (string, error
 	if localExists {
 		return "", fmt.Errorf("该标签已有活动连接")
 	}
-	shell, err := resolveLocalShell()
+	settings, err := a.GetLocalTerminalSettings()
 	if err != nil {
 		return "", err
 	}
+	shell, err := resolveLocalShell(settings.Shell)
+	if err != nil {
+		return "", err
+	}
+	shellName := strings.TrimSuffix(filepath.Base(shell), filepath.Ext(shell))
 	if size.Columns < 1 {
 		size.Columns = 100
 	}
@@ -67,7 +70,7 @@ func (a *App) StartLocalTerminal(tabId string, size TerminalSize) (string, error
 	if err != nil {
 		return "", fmt.Errorf("无法启动本地终端：%w", err)
 	}
-	logger, logErr := a.newTerminalLogger(tabId, ConnectionConfig{Host: "local", Username: os.Getenv("USER")})
+	logger, logErr := a.newTerminalLoggerFor(tabId, terminalLogLocalID, ConnectionConfig{Host: "local", Username: os.Getenv("USER")})
 	if logErr != nil {
 		fmt.Printf("无法创建终端日志：%v\n", logErr)
 	}
@@ -89,7 +92,7 @@ func (a *App) StartLocalTerminal(tabId string, size TerminalSize) (string, error
 
 	go a.pumpLocalOutput(tabId, sess)
 	go a.watchLocalSession(tabId, sess)
-	return "已启动本地终端", nil
+	return shellName, nil
 }
 
 // hasUTF8Locale 报告当前环境是否已配置 UTF-8 locale（LANG 或 LC_ALL）。
@@ -103,18 +106,72 @@ func hasUTF8Locale() bool {
 	return false
 }
 
-// resolveLocalShell 按 SHELL 环境变量优先，其次常见系统 shell，返回第一个可用路径。
-func resolveLocalShell() (string, error) {
-	candidates := []string{strings.TrimSpace(os.Getenv("SHELL")), "/bin/zsh", "/bin/bash", "/bin/sh"}
-	for _, candidate := range candidates {
-		if candidate == "" {
+// resolveLocalShell 优先解析明确设置；缺省时使用当前系统探测到的首选终端。
+func resolveLocalShell(preferred string) (string, error) {
+	preferred = strings.TrimSpace(preferred)
+	if preferred != "" {
+		path, err := exec.LookPath(preferred)
+		if err != nil {
+			return "", fmt.Errorf("找不到配置的本地终端 %q：%w", preferred, err)
+		}
+		return filepath.Abs(path)
+	}
+	for _, option := range availableLocalTerminals() {
+		if option.Path == "" {
 			continue
 		}
-		if path, err := exec.LookPath(candidate); err == nil {
-			return path, nil
+		return option.Path, nil
+	}
+	return "", fmt.Errorf("未找到可用的本地终端")
+}
+
+// availableLocalTerminals 按平台列出主要终端，并过滤尚未安装的项。
+// Windows 同时识别 PowerShell、PowerShell 7、CMD、Git Bash 与 WSL；Unix
+// 平台识别用户默认 shell、zsh、fish、bash 等。
+func availableLocalTerminals() []LocalTerminalOption {
+	type candidate struct{ name, command string }
+	candidates := []candidate{}
+	if runtime.GOOS == "windows" {
+		candidates = []candidate{
+			{"PowerShell 7", "pwsh.exe"}, {"Windows PowerShell", "powershell.exe"},
+			{"命令提示符", "cmd.exe"}, {"Git Bash", "bash.exe"}, {"WSL", "wsl.exe"},
+		}
+		if programFiles := os.Getenv("ProgramFiles"); programFiles != "" {
+			candidates = append(candidates,
+				candidate{"PowerShell 7", filepath.Join(programFiles, "PowerShell", "7", "pwsh.exe")},
+				candidate{"Git Bash", filepath.Join(programFiles, "Git", "bin", "bash.exe")},
+			)
+		}
+	} else {
+		defaultShell := strings.TrimSpace(os.Getenv("SHELL"))
+		defaultName := "系统默认终端"
+		if defaultShell != "" {
+			defaultName += "（" + filepath.Base(defaultShell) + "）"
+		}
+		candidates = []candidate{
+			{defaultName, defaultShell}, {"zsh", "zsh"},
+			{"fish", "fish"}, {"bash", "bash"}, {"sh", "sh"}, {"dash", "dash"},
+			{"ksh", "ksh"}, {"nushell", "nu"},
 		}
 	}
-	return "", fmt.Errorf("未找到可用的本地 shell")
+	seen := map[string]bool{}
+	options := make([]LocalTerminalOption, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.command == "" {
+			continue
+		}
+		path, err := exec.LookPath(candidate.command)
+		if err != nil {
+			continue
+		}
+		path, err = filepath.Abs(path)
+		if err != nil || seen[strings.ToLower(path)] {
+			continue
+		}
+		seen[strings.ToLower(path)] = true
+		options = append(options, LocalTerminalOption{Name: candidate.name, Path: path})
+	}
+	return options
 }
 
 // pumpLocalOutput 把 PTY 输出转发给前端，顺序与 SSH 的 terminalEventWriter 一致：

@@ -243,6 +243,14 @@ export function useTabs({ restoreTabs = true } = {}) {
     return created.workspace;
   }, []);
 
+  const updateWorkspace = useCallback((id, name) => {
+    const nextName = name.trim();
+    if (!nextName) return;
+    setWorkspaces(prev => prev.map(workspace => (
+      workspace.id === id ? { ...workspace, name: nextName } : workspace
+    )));
+  }, []);
+
   const deleteWorkspace = useCallback(id => {
     if (workspaces.length <= 1) return false;
     const targetIndex = workspaces.findIndex(workspace => workspace.id === id);
@@ -375,6 +383,7 @@ export function useTabs({ restoreTabs = true } = {}) {
     selectTab,
     switchWorkspace,
     createWorkspace,
+    updateWorkspace,
     deleteWorkspace,
     newTab,
     openTab,

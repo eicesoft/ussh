@@ -164,6 +164,8 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	// macOS 上背景材质由窗口内注入的 NSVisualEffectView 实现，窗口就绪后应用。
 	applyWindowMaterial(LoadBackdropType())
+	// 通过 Wails 的原生拖放桥接接收本机文件路径；不要直接替换 WKWebView 方法。
+	installFileDrop(a.ctx, a.emitFilesDropped)
 	if db, err := openStore(); err == nil {
 		a.db = db
 	} else {

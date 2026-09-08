@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, Copy, FileText, LayoutDashboard, Pin, PinOff, Plus, SquareTerminal, Unplug, X } from 'lucide-react';
+import { ChevronDown, Copy, FileText, LayoutDashboard, Pencil, Pin, PinOff, Plus, RotateCw, SquareTerminal, Unplug, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -44,7 +44,7 @@ const authText = {
   keyfile: '密钥文件',
 };
 
-export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onClone, onTogglePinned, onViewLogs, onNewLocalTerminal }) {
+export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onReconnect, onClone, onEditConnection, onTogglePinned, onViewLogs, onNewLocalTerminal }) {
   const connectionTabs = tabs.filter(tab => tab.kind !== 'dashboard');
   const scrollRef = useRef(null);
   const [contextTabId, setContextTabId] = useState(null);
@@ -270,17 +270,23 @@ export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onClon
           </Tooltip>
         )}
         <DropdownMenuContent align="start" side="bottom" className="min-w-[9rem]">
+          {tab.kind === 'connection' && (
+            <DropdownMenuItem
+              disabled={!tab.sourceNodeId}
+              onSelect={() => onEditConnection?.(tab)}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              编辑连接
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
-            disabled={!(tab.kind === 'connection' || tab.kind === 'local') || (tab.status !== 'connected' && tab.status !== 'connecting')}
-            onSelect={() => onDisconnect(tab)}
+            disabled={tab.kind !== 'connection' && tab.kind !== 'local'}
+            onSelect={() => onViewLogs?.(tab)}
           >
-            <Unplug className="h-3.5 w-3.5" />
-            {tab.kind === 'local' ? '退出会话' : '断开'}
+            <FileText className="h-3.5 w-3.5" />
+            查看日志
           </DropdownMenuItem>
-          <DropdownMenuItem disabled={!tab.closable} onSelect={() => requestClose(tab)}>
-            <X className="h-3.5 w-3.5" />
-            关闭
-          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuItem
             disabled={tab.kind !== 'connection' || !tab.form}
             onSelect={() => onClone(tab)}
@@ -288,12 +294,34 @@ export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onClon
             <Copy className="h-3.5 w-3.5" />
             克隆标签页
           </DropdownMenuItem>
+          {tab.kind === 'connection' && (
+            <DropdownMenuItem
+              disabled={!tab.form || tab.status === 'connecting'}
+              onSelect={() => onReconnect?.(tab)}
+            >
+              <RotateCw className="h-3.5 w-3.5" />
+              重新连接
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
-            disabled={tab.kind !== 'connection' && tab.kind !== 'local'}
-            onSelect={() => onViewLogs?.(tab)}
+            disabled={!(tab.kind === 'connection' || tab.kind === 'local') || (tab.status !== 'connected' && tab.status !== 'connecting')}
+            onSelect={() => onDisconnect(tab)}
           >
-            <FileText className="h-3.5 w-3.5" />
-            查看日志
+            <Unplug className="h-3.5 w-3.5" />
+            {tab.kind === 'local' ? '退出会话' : '断开'}
+          </DropdownMenuItem>
+          {tab.kind === 'connection' && (
+            <DropdownMenuItem
+              disabled={!tab.form || tab.status === 'connecting'}
+              onSelect={() => onReconnect?.(tab)}
+            >
+              <RotateCw className="h-3.5 w-3.5" />
+              重新连接
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem disabled={!tab.closable} onSelect={() => requestClose(tab)}>
+            <X className="h-3.5 w-3.5" />
+            关闭
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => onTogglePinned(tab.id)}>

@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { ChevronRight, Home, Layers3, Plus, Trash2 } from 'lucide-react';
+import { ChevronRight, Home, Layers3, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
-export function WorkspaceList({ workspaces, activeId, onSelect, onAdd, onDelete }) {
+export function WorkspaceList({ workspaces, activeId, onSelect, onAdd, onEdit, onDelete }) {
   const [open, setOpen] = useState(true);
   const activeWorkspace = workspaces.find(workspace => workspace.id === activeId);
 
@@ -65,19 +65,34 @@ export function WorkspaceList({ workspaces, activeId, onSelect, onAdd, onDelete 
                   <Icon className="h-3.5 w-3.5 shrink-0" />
                   <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
                   {workspace.icon !== 'home' && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-5 w-5 shrink-0 rounded-md text-[#88888d] opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-destructive/10 hover:text-destructive dark:text-muted-foreground dark:hover:text-destructive"
-                      onClick={event => {
-                        event.stopPropagation();
-                        onDelete?.(workspace);
-                      }}
-                      aria-label={`删除工作区 ${workspace.name}`}
-                      title="删除工作区"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 shrink-0 rounded-md text-[#88888d] opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-foreground/10 hover:text-[#36363b] dark:text-muted-foreground dark:hover:text-foreground"
+                        onClick={event => {
+                          event.stopPropagation();
+                          onEdit?.(workspace);
+                        }}
+                        aria-label={`编辑工作区 ${workspace.name}`}
+                        title="编辑工作区"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 shrink-0 rounded-md text-[#88888d] opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-destructive/10 hover:text-destructive dark:text-muted-foreground dark:hover:text-destructive"
+                        onClick={event => {
+                          event.stopPropagation();
+                          onDelete?.(workspace);
+                        }}
+                        aria-label={`删除工作区 ${workspace.name}`}
+                        title="删除工作区"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </>
                   )}
                 </div>
               );

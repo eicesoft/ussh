@@ -22,7 +22,9 @@ function formatSize(size) {
 }
 
 export function TerminalLogDialog({ open, tab, onClose, onOpenLog }) {
-  const connectionId = String(tab?.form?.savedNodeId || tab?.id || '');
+  const connectionId = tab?.kind === 'local'
+    ? 'local'
+    : String(tab?.form?.savedNodeId || tab?.id || '');
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

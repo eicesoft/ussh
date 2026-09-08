@@ -46,7 +46,7 @@ frontend/        → React + Vite + Tailwind + shadcn/ui（New York 风格）
 ### 前端关键设计
 
 - **Shell 组件**是顶层布局编排器：左侧 `ConnectionTree`（连接树 + 活动标签页），中间 `TabBar` + 内容区（`ConnectionForm` / `TerminalView` / `ConnectionDashboard`），右侧可选 `UtilityPanel` + `UtilityRail`。面板用 `react-resizable-panels` 实现可拖拽分割。
-- **标签页管理**（`useTabs` hook）：每个标签页有 `kind`（`dashboard` | `connection`）、`status`（`idle` | `connecting` | `connected` | `closed`）。dashboard 标签页不可关闭。`buffersRef` 缓存终端输出（上限 2MB），`termsRef` 持有 xterm.js Terminal 实例引用。
+- **标签页管理**（`useTabs` hook）：每个标签页有 `kind`（`dashboard` | `connection` | `local` | `log`）、`status`（`idle` | `connecting` | `connected` | `closed`）。dashboard 标签页不可关闭，`local` 为本地 PTY 终端（`local_terminal.go`，与 SSH 会话互斥、共用 `SendInput`/`ResizeTerminal`/`Disconnect` 路由）。`buffersRef` 缓存终端输出（上限 2MB），`termsRef` 持有 xterm.js Terminal 实例引用。
 - **终端实现**（`TerminalView`）：xterm.js + FitAddon 自动适应容器大小。`term.onData` 回调发送输入到 Go 后端。通过 `ResizeObserver` + `window.resize` 监听尺寸变化并同步到 SSH 会话。
 - **API 层**（`frontend/src/lib/api.js`）：封装 `window.go.main.App` 调用和 Wails Events 订阅。`runtimeAvailable` 标记用于判断是否在 Wails 环境内运行。
 - **认证方式**：前端 `ConnectionForm` 根据 `authType` 切换表单字段（密码输入框 vs 私钥文本框 vs 私钥文件选择器）。

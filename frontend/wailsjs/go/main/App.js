@@ -50,12 +50,24 @@ export function GetCredential(arg1) {
   return window['go']['main']['App']['GetCredential'](arg1);
 }
 
+export function GetLocalTerminalSettings() {
+  return window['go']['main']['App']['GetLocalTerminalSettings']();
+}
+
 export function GetSystemInfo(arg1) {
   return window['go']['main']['App']['GetSystemInfo'](arg1);
 }
 
 export function GetTerminalLogSettings() {
   return window['go']['main']['App']['GetTerminalLogSettings']();
+}
+
+export function ListAvailableLocalTerminals() {
+  return window['go']['main']['App']['ListAvailableLocalTerminals']();
+}
+
+export function ListAvailableTerminalFonts() {
+  return window['go']['main']['App']['ListAvailableTerminalFonts']();
 }
 
 export function ListConnectionNodes() {
@@ -74,6 +86,10 @@ export function MoveNode(arg1, arg2) {
   return window['go']['main']['App']['MoveNode'](arg1, arg2);
 }
 
+export function PickDownloadDirectory() {
+  return window['go']['main']['App']['PickDownloadDirectory']();
+}
+
 export function PickPrivateKeyFile() {
   return window['go']['main']['App']['PickPrivateKeyFile']();
 }
@@ -84,6 +100,10 @@ export function PickSavePath(arg1) {
 
 export function PickTerminalLogDirectory() {
   return window['go']['main']['App']['PickTerminalLogDirectory']();
+}
+
+export function PickUploadFiles() {
+  return window['go']['main']['App']['PickUploadFiles']();
 }
 
 export function ReadTerminalLog(arg1, arg2) {
@@ -118,6 +138,10 @@ export function SetGpuAcceleration(arg1) {
   return window['go']['main']['App']['SetGpuAcceleration'](arg1);
 }
 
+export function SetLocalTerminalSettings(arg1) {
+  return window['go']['main']['App']['SetLocalTerminalSettings'](arg1);
+}
+
 export function SetTerminalLogSettings(arg1) {
   return window['go']['main']['App']['SetTerminalLogSettings'](arg1);
 }
@@ -146,6 +170,10 @@ export function SftpStat(arg1, arg2) {
   return window['go']['main']['App']['SftpStat'](arg1, arg2);
 }
 
+export function SftpUpload(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SftpUpload'](arg1, arg2, arg3);
+}
+
 export function SftpWrite(arg1, arg2, arg3) {
   return window['go']['main']['App']['SftpWrite'](arg1, arg2, arg3);
 }
@@ -156,6 +184,10 @@ export function StartAIChat(arg1, arg2, arg3, arg4, arg5) {
 
 export function StartAgent(arg1) {
   return window['go']['main']['App']['StartAgent'](arg1);
+}
+
+export function StartLocalTerminal(arg1, arg2) {
+  return window['go']['main']['App']['StartLocalTerminal'](arg1, arg2);
 }
 
 export function StopAIChat(arg1) {

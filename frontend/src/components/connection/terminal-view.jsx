@@ -4,6 +4,26 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { ClipboardGetText } from '../../../wailsjs/runtime/runtime';
 
+const defaultTerminalFontFamily = [
+  '"FiraCode Nerd Font Mono"',
+  '"JetBrainsMono Nerd Font Mono"',
+  '"Hack Nerd Font Mono"',
+  '"Agave Nerd Font Mono"',
+  'Menlo',
+  'Consolas',
+  '"Courier New"',
+  '"Apple Symbols"',
+  '"Apple Color Emoji"',
+  '"Segoe UI Emoji"',
+  'monospace',
+].join(', ');
+
+function terminalFontFamily(fontFamily) {
+  const selected = String(fontFamily || '').trim();
+  if (!selected) return defaultTerminalFontFamily;
+  return `"${selected.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}", ${defaultTerminalFontFamily}`;
+}
+
 export function TerminalView({ tab, active = true, onSend, onResize, onFocus, onTermReady, onReconnect, terminalSettings }) {
   const hostRef = useRef(null);
   const termRef = useRef(null);
@@ -32,14 +52,43 @@ export function TerminalView({ tab, active = true, onSend, onResize, onFocus, on
 
   useEffect(() => {
     if (!hostRef.current) return;
+    // 终端调色板：低饱和暗色风格，覆盖 xterm 默认的高饱和经典色，
+    // SSH 与本地终端共用同一套 ANSI 颜色。
+    const terminalTheme = {
+      cursor: '#d0d4cb',
+      cursorAccent: '#1d2225',
+      foreground: '#c7ccc3',
+      black: '#31363a',
+      red: '#d8868b',
+      green: '#8ea97b',
+      yellow: '#cbb46f',
+      // 使用低饱和蓝灰，避免高对比背景下蓝色过于跳脱。
+      blue: '#9aaabd',
+      magenta: '#bf9bc0',
+      cyan: '#7fb5b0',
+      white: '#c2c7c4',
+      brightBlack: '#787f7c',
+      brightRed: '#e39a9e',
+      brightGreen: '#a3bd90',
+      brightYellow: '#d9c48d',
+      brightBlue: '#b2c0cd',
+      brightMagenta: '#cdafcd',
+      brightCyan: '#94c6c1',
+      brightWhite: '#e6e9e4',
+    };
     const term = new Terminal({
       cursorBlink: terminalSettings?.cursorBlink ?? true,
-      fontFamily: 'Menlo, Consolas, "Courier New", monospace',
+      // Nerd Font Mono 覆盖提示符图标与 powerline/emoji 类符号，缺失时逐级
+      // 回退到系统符号与 emoji 字体，避免 canvas 渲染画方框。
+      fontFamily: terminalFontFamily(terminalSettings?.fontFamily),
       fontSize: terminalSettings?.fontSize ?? 13,
+      // 某些 shell 组合 ANSI 前景色和背景色时（例如绿色文字配绿色底），
+      // 由 xterm 自动调整前景色以满足 WCAG AA 的可读性对比度。
+      minimumContrastRatio: 4.5,
       // 画布背景完全透明：透明度由外层终端容器统一承担，文字保持不透明。
       theme: {
+        ...terminalTheme,
         background: '#0b122000',
-        foreground: '#e2e8f0',
         selectionBackground: '#5f718a',
         selectionForeground: '#ffffff',
         selectionInactiveBackground: '#52647c',
@@ -159,10 +208,11 @@ export function TerminalView({ tab, active = true, onSend, onResize, onFocus, on
     const term = termRef.current;
     if (!term || !terminalSettings) return;
     term.options.cursorBlink = terminalSettings.cursorBlink;
+    term.options.fontFamily = terminalFontFamily(terminalSettings.fontFamily);
     term.options.fontSize = terminalSettings.fontSize;
     term.options.scrollback = terminalSettings.scrollback;
     scheduleFitRef.current?.();
-  }, [terminalSettings?.cursorBlink, terminalSettings?.fontSize, terminalSettings?.scrollback]);
+  }, [terminalSettings?.cursorBlink, terminalSettings?.fontFamily, terminalSettings?.fontSize, terminalSettings?.scrollback]);
 
   useEffect(() => {
     if (tab.buffer && termRef.current) {
@@ -213,7 +263,7 @@ export function TerminalView({ tab, active = true, onSend, onResize, onFocus, on
             </span>
             <div className="text-center">
               <p className="text-sm font-medium">正在连接 {tab.label}</p>
-              <p className="mt-1 text-xs text-slate-400">正在建立安全 SSH 会话…</p>
+              <p className="mt-1 text-xs text-slate-400">{tab.kind === 'local' ? '正在启动本地 shell…' : '正在建立安全 SSH 会话…'}</p>
             </div>
           </div>
         </div>

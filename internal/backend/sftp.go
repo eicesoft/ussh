@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -28,6 +29,20 @@ type SftpFileInfo struct {
 	Content  []byte `json:"content"`
 	Size     int64  `json:"size"`
 	Filename string `json:"filename"`
+}
+
+type SftpDownloadProgress struct {
+	RemotePath      string `json:"remotePath"`
+	DownloadedBytes int64  `json:"downloadedBytes"`
+	TotalBytes      int64  `json:"totalBytes"`
+}
+
+// LocalUploadFile 是从本机原生文件选择器选中的上传源文件。
+type LocalUploadFile struct {
+	Path         string `json:"path"`
+	Name         string `json:"name"`
+	RelativePath string `json:"relativePath"`
+	Size         int64  `json:"size"`
 }
 
 func (a *App) sftpClient(tabId string) (*sftp.Client, error) {
@@ -139,6 +154,55 @@ func (a *App) SftpWrite(tabId string, filePath string, content []byte) error {
 	return nil
 }
 
+// SftpUpload 将本机文件直接流式上传到远端，避免 WebView 文件选择器遗漏点文件。
+func (a *App) SftpUpload(tabId string, localPath string, remotePath string) error {
+	src, err := os.Open(localPath)
+	if err != nil {
+		return fmt.Errorf("打开本地文件失败：%w", err)
+	}
+	defer src.Close()
+
+	client, err := a.sftpClient(tabId)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	dst, err := client.Create(remotePath)
+	if err != nil {
+		return fmt.Errorf("创建远程文件失败：%w", err)
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, src); err != nil {
+		return fmt.Errorf("上传文件失败：%w", err)
+	}
+	return nil
+}
+
+// PickUploadFiles 使用系统原生选择器选择上传源文件，并显式显示 .env 等点文件。
+func (a *App) PickUploadFiles() ([]LocalUploadFile, error) {
+	if a.ctx == nil {
+		return nil, fmt.Errorf("Wails 上下文尚未就绪")
+	}
+	paths, err := pickUploadFilesPaths(a.ctx, "选择要上传的文件")
+	if err != nil {
+		return nil, err
+	}
+	files := make([]LocalUploadFile, 0, len(paths))
+	for _, localPath := range paths {
+		info, err := os.Stat(localPath)
+		if err != nil {
+			return nil, fmt.Errorf("读取本地文件信息失败：%w", err)
+		}
+		if !info.Mode().IsRegular() {
+			continue
+		}
+		files = append(files, LocalUploadFile{Path: localPath, Name: info.Name(), Size: info.Size()})
+	}
+	return files, nil
+}
+
 func (a *App) SftpMkdir(tabId string, dirPath string) error {
 	client, err := a.sftpClient(tabId)
 	if err != nil {
@@ -222,7 +286,7 @@ func (a *App) SftpStat(tabId string, targetPath string) (*SftpEntry, error) {
 	}, nil
 }
 
-// SftpDownload 把远程文件流式拷贝到本地 localPath。
+// SftpDownload 把远程文件或目录递归流式拷贝到本地 localPath。
 // 不限制大小 —— 使用 io.Copy 流式处理，不会撑爆内存。
 func (a *App) SftpDownload(tabId string, remotePath string, localPath string) (int64, error) {
 	if strings.TrimSpace(localPath) == "" {
@@ -233,6 +297,78 @@ func (a *App) SftpDownload(tabId string, remotePath string, localPath string) (i
 		return 0, err
 	}
 	defer client.Close()
+	total, err := sftpDownloadSize(client, remotePath)
+	if err != nil {
+		return 0, err
+	}
+	var downloaded int64
+	report := func(delta int64) {
+		downloaded += delta
+		runtime.EventsEmit(a.ctx, "sftp-download-progress", SftpDownloadProgress{remotePath, downloaded, total})
+	}
+	report(0)
+	return sftpDownload(client, remotePath, localPath, report)
+}
+
+func sftpDownloadSize(client *sftp.Client, remotePath string) (int64, error) {
+	stat, err := client.Stat(remotePath)
+	if err != nil {
+		return 0, fmt.Errorf("获取远程文件信息失败：%w", err)
+	}
+	if !stat.IsDir() {
+		return stat.Size(), nil
+	}
+	entries, err := client.ReadDir(remotePath)
+	if err != nil {
+		return 0, fmt.Errorf("读取远程目录失败：%w", err)
+	}
+	var total int64
+	for _, entry := range entries {
+		size, err := sftpDownloadSize(client, path.Join(remotePath, entry.Name()))
+		if err != nil {
+			return total, err
+		}
+		total += size
+	}
+	return total, nil
+}
+
+type downloadProgressWriter struct {
+	writer io.Writer
+	report func(int64)
+}
+
+func (w downloadProgressWriter) Write(p []byte) (int, error) {
+	n, err := w.writer.Write(p)
+	if n > 0 {
+		w.report(int64(n))
+	}
+	return n, err
+}
+
+func sftpDownload(client *sftp.Client, remotePath string, localPath string, report func(int64)) (int64, error) {
+	stat, err := client.Stat(remotePath)
+	if err != nil {
+		return 0, fmt.Errorf("获取远程文件信息失败：%w", err)
+	}
+	if stat.IsDir() {
+		if err := os.MkdirAll(localPath, 0o755); err != nil {
+			return 0, fmt.Errorf("创建本地目录失败：%w", err)
+		}
+		entries, err := client.ReadDir(remotePath)
+		if err != nil {
+			return 0, fmt.Errorf("读取远程目录失败：%w", err)
+		}
+		var total int64
+		for _, entry := range entries {
+			written, err := sftpDownload(client, path.Join(remotePath, entry.Name()), filepath.Join(localPath, entry.Name()), report)
+			if err != nil {
+				return total, err
+			}
+			total += written
+		}
+		return total, nil
+	}
 
 	src, err := client.Open(remotePath)
 	if err != nil {
@@ -240,12 +376,8 @@ func (a *App) SftpDownload(tabId string, remotePath string, localPath string) (i
 	}
 	defer src.Close()
 
-	stat, err := src.Stat()
-	if err != nil {
-		return 0, err
-	}
-	if stat.IsDir() {
-		return 0, fmt.Errorf("无法下载目录")
+	if err := os.MkdirAll(filepath.Dir(localPath), 0o755); err != nil {
+		return 0, fmt.Errorf("创建本地目录失败：%w", err)
 	}
 
 	dst, err := os.Create(localPath)
@@ -254,11 +386,22 @@ func (a *App) SftpDownload(tabId string, remotePath string, localPath string) (i
 	}
 	defer dst.Close()
 
-	written, err := io.Copy(dst, src)
+	written, err := io.Copy(downloadProgressWriter{dst, report}, src)
 	if err != nil {
 		return written, fmt.Errorf("下载失败：%w", err)
 	}
 	return written, nil
+}
+
+// PickDownloadDirectory 弹出系统目录选择器，作为单个或多个下载项的本地根目录。
+func (a *App) PickDownloadDirectory() (string, error) {
+	if a.ctx == nil {
+		return "", fmt.Errorf("Wails 上下文尚未就绪")
+	}
+	return runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title:                "选择下载目录",
+		CanCreateDirectories: true,
+	})
 }
 
 // PickSavePath 弹出系统原生保存对话框，返回用户选择的本地路径。

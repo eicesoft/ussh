@@ -26,6 +26,7 @@ import { useTerminalEvents } from '@/hooks/use-terminal-event';
 import { useSettings } from '@/hooks/use-settings';
 import { api, onShowAbout, onShowQuitConfirm, onShowSettings, runtimeAvailable } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { matchesShortcut } from '@/lib/shortcuts';
 import { DEFAULT_FOLDER_COLOR, normalizeFolderColor } from '@/lib/folder-colors';
 import { Button } from '@/components/ui/button';
 import {
@@ -54,6 +55,7 @@ export function Shell() {
     selectTab,
     switchWorkspace,
     createWorkspace,
+    updateWorkspace,
     deleteWorkspace,
     newTab,
     openTab,
@@ -92,6 +94,7 @@ export function Shell() {
   const [showSavedLinkDialog, setShowSavedLinkDialog] = useState(false);
   const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
   const [showNewWorkspaceDialog, setShowNewWorkspaceDialog] = useState(false);
+  const [editingWorkspace, setEditingWorkspace] = useState(null);
   const [newFolderParentId, setNewFolderParentId] = useState(0);
   const [editingFolder, setEditingFolder] = useState(null);
   const [newLinkParentId, setNewLinkParentId] = useState(0);
@@ -183,6 +186,19 @@ export function Shell() {
     createWorkspace(name);
   }, [createWorkspace]);
 
+  const handleEditWorkspace = useCallback(workspace => {
+    setEditingWorkspace(workspace);
+  }, []);
+
+  const closeWorkspaceDialog = useCallback(() => {
+    setShowNewWorkspaceDialog(false);
+    setEditingWorkspace(null);
+  }, []);
+
+  const submitWorkspaceUpdate = useCallback(name => {
+    if (editingWorkspace) updateWorkspace(editingWorkspace.id, name);
+  }, [editingWorkspace, updateWorkspace]);
+
   const handleEditFolder = useCallback(folder => {
     setEditingFolder(folder);
   }, []);
@@ -237,6 +253,18 @@ export function Shell() {
       }
     },
     [getCredential],
+  );
+
+  const handleEditConnectionTab = useCallback(
+    tab => {
+      const node = nodes.find(item => item.type === 'ssh' && item.id === tab?.sourceNodeId);
+      if (!node) {
+        setGlobalStatus('该连接未保存，无法编辑');
+        return;
+      }
+      void handleEditSaved(node);
+    },
+    [handleEditSaved, nodes],
   );
 
   const handleDeleteSaved = useCallback(node => {
@@ -423,7 +451,7 @@ export function Shell() {
   );
 
   const openLogList = useCallback(tab => {
-    if (tab?.kind === 'connection') setLogSourceTab(tab);
+    if (tab?.kind === 'connection' || tab?.kind === 'local') setLogSourceTab(tab);
   }, []);
 
   const openSavedLogList = useCallback(node => {
@@ -431,7 +459,9 @@ export function Shell() {
   }, []);
 
   const openLogTab = useCallback((sourceTab, log) => {
-    const connectionId = String(sourceTab.form?.savedNodeId || sourceTab.id);
+    const connectionId = sourceTab.kind === 'local'
+      ? 'local'
+      : String(sourceTab.form?.savedNodeId || sourceTab.id);
     const existing = tabs.find(tab => (
       tab.kind === 'log' && tab.log?.connectionId === connectionId && tab.log?.name === log.name
     ));
@@ -519,6 +549,84 @@ export function Shell() {
     [newTab, updateTab, closeSavedDialog, handleConnect],
   );
 
+  // startLocalTerminal 启动本机 shell 并把标签置为 connected；失败时落到
+  // closed 状态，把错误写进终端缓冲，用户按 Enter 可重试。
+  const startLocalTerminal = useCallback(
+    async tabId => {
+      setTabStatus(tabId, 'connecting');
+      try {
+        const shellName = await api.startLocalTerminal(tabId, { columns: 100, rows: 30 });
+        updateTab(tabId, { label: shellName });
+        setGlobalStatus(`已启动本地终端（${shellName}）`);
+        setTabStatus(tabId, 'connected');
+        // PTY 以默认尺寸启动，这里补同步终端实际尺寸。
+        const term = termsRef.current[tabId];
+        if (term && term.cols > 0 && term.rows > 0) {
+          api.resizeTerminal(tabId, { columns: term.cols, rows: term.rows }).catch(() => {});
+        }
+      } catch (e) {
+        setGlobalStatus(`本地终端启动失败：${e}`);
+        setTabStatus(tabId, 'closed');
+        writeToTab(tabId, `\r\n本地终端启动失败：${e}\r\n`);
+      }
+    },
+    [setTabStatus, termsRef, updateTab, writeToTab],
+  );
+
+  // openLocalTerminal 在当前工作区最后一个标签后追加一个本地终端标签。
+  const openLocalTerminal = useCallback(() => {
+    const count = workspaceTabs.filter(tab => tab.kind === 'local').length;
+    const id = openTab({
+      kind: 'local',
+      label: count > 0 ? `本地终端 ${count + 1}` : '本地终端',
+      status: 'connecting',
+      buffer: '',
+    });
+    void startLocalTerminal(id);
+  }, [openTab, startLocalTerminal, workspaceTabs]);
+
+  // 关闭本地标签时先终止 PTY，避免遗留僵尸 shell 进程。
+  const handleCloseTab = useCallback(
+    id => {
+      const tab = tabs.find(item => item.id === id);
+      if (tab?.kind === 'local') api.disconnect(id).catch(() => {});
+      closeTab(id);
+    },
+    [tabs, closeTab],
+  );
+
+  const shortcutsRef = useRef(settings.shortcuts);
+  shortcutsRef.current = settings.shortcuts;
+  const shortcutsActiveTabRef = useRef(activeTab);
+  shortcutsActiveTabRef.current = activeTab;
+  const cloneTabRef = useRef(cloneTab);
+  cloneTabRef.current = cloneTab;
+  const handleCloseTabRef = useRef(handleCloseTab);
+  handleCloseTabRef.current = handleCloseTab;
+
+  useEffect(() => {
+    const onKeyDown = event => {
+      if (showSettingsDialog) {
+        // 设置弹窗内由快捷键录制器处理按键，避免同时触发下面的动作。
+        return;
+      }
+      const tab = shortcutsActiveTabRef.current;
+      if (tab && matchesShortcut(shortcutsRef.current.cloneTab, event)) {
+        event.preventDefault();
+        event.stopPropagation();
+        cloneTabRef.current(tab);
+        return;
+      }
+      if (tab && tab.kind !== 'dashboard' && matchesShortcut(shortcutsRef.current.closeTab, event)) {
+        event.preventDefault();
+        event.stopPropagation();
+        handleCloseTabRef.current(tab.id);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [showSettingsDialog]);
+
   const handleSend = useCallback(async (tabId, data) => {
     try {
       await api.sendInput(tabId, data);
@@ -573,6 +681,26 @@ export function Shell() {
     }
   }, [setTabStatus, writeToTab]);
 
+  const reconnectTab = useCallback(async tab => {
+    if (!tab?.form || tab.kind !== 'connection' || tab.status === 'connecting') return;
+    if (tab.status === 'connected') await disconnectTab(tab);
+
+    // 已保存连接可能刚在编辑弹窗中更新；重连时使用其最新主机配置。
+    const savedNode = nodes.find(node => node.type === 'ssh' && node.id === tab.sourceNodeId);
+    const form = savedNode
+      ? {
+          ...tab.form,
+          host: savedNode.host,
+          port: savedNode.port,
+          username: savedNode.username,
+          authType: savedNode.authType || 'password',
+          keepaliveEnabled: savedNode.keepaliveEnabled,
+          keepaliveInterval: savedNode.keepaliveInterval || 30,
+        }
+      : tab.form;
+    await handleConnect(tab.id, form);
+  }, [disconnectTab, handleConnect, nodes]);
+
   const broadcastSend = useCallback((input, tabIds) => {
     tabIds.forEach(tabId => {
       api.sendInput(tabId, input).catch(() => {});
@@ -618,7 +746,7 @@ export function Shell() {
   );
 
   const terminalActive =
-    activeTab.kind === 'connection' &&
+    (activeTab.kind === 'connection' || activeTab.kind === 'local') &&
     (activeTab.status === 'connected' || activeTab.status === 'connecting' || activeTab.status === 'closed');
   // 线性透明度在低值区间变化不明显：例如 30% 仍会把浅色亚克力压成整块灰色。
   // 使用缓出曲线，让用户降低滑块时能更快看到统一背景，同时 100% 仍保持完全不透明。
@@ -629,7 +757,11 @@ export function Shell() {
   ).length;
   // AI 智能体的流式监听不能因为切到未连接标签或总览而卸载；
   // 具体工具仍只在终端标签中显示，AI 会话按标签自行隔离。
-  const utilityPanelVisible = activeUtility && (terminalActive || activeUtility === 'ai-agent');
+  // 本地终端禁用插件：内置插件均依赖 SSH 连接，本地标签不显示工具按钮与侧栏。
+  const utilityPanelVisible =
+    activeUtility &&
+    activeTab.kind !== 'local' &&
+    (terminalActive || activeUtility === 'ai-agent');
 
   const pluginContext = useMemo(() => ({
     activeTab,
@@ -662,7 +794,7 @@ export function Shell() {
           <div
             ref={connectionTreeHeaderRef}
             className="flex shrink-0 items-center gap-3 bg-transparent px-3"
-            style={{ width: isConnectionTreeVisible ? 'var(--connection-tree-width, 281px)' : 200 }}
+            style={{ width: 'var(--connection-tree-width, 281px)' }}
           >
             <div
               className="app-no-drag group/window-controls flex items-center gap-2"
@@ -715,11 +847,14 @@ export function Shell() {
             tabs={workspaceTabs}
             activeId={activeId}
             onSelect={selectTab}
-            onClose={closeTab}
+            onClose={handleCloseTab}
             onDisconnect={disconnectTab}
+            onReconnect={reconnectTab}
             onClone={cloneTab}
+            onEditConnection={handleEditConnectionTab}
             onTogglePinned={toggleTabPinned}
             onViewLogs={openLogList}
+            onNewLocalTerminal={openLocalTerminal}
           />
         </div>
       </header>
@@ -739,6 +874,7 @@ export function Shell() {
             activeWorkspaceId={activeWorkspaceId}
             onSwitchWorkspace={switchWorkspace}
             onAddWorkspace={() => setShowNewWorkspaceDialog(true)}
+            onEditWorkspace={handleEditWorkspace}
             onDeleteWorkspace={workspace => setDeletingWorkspace(workspace)}
             nodes={nodes}
             onOpenSaved={connectSavedLink}
@@ -791,7 +927,9 @@ export function Shell() {
                   ) : activeTab.kind === 'log' ? (
                     <TerminalLogView log={activeTab.log} />
                   ) : terminalActive ? (
-                    <TerminalActions active={activeUtility} onToggle={setActiveUtility} />
+                    activeTab.kind === 'connection' ? (
+                      <TerminalActions active={activeUtility} onToggle={setActiveUtility} />
+                    ) : null
                   ) : (
                     <ConnectionForm
                       initialForm={activeTab.form}
@@ -801,7 +939,7 @@ export function Shell() {
                   )}
                   <div className="pointer-events-none absolute inset-0">
                     {tabs
-                      .filter(tab => tab.kind === 'connection' && (
+                      .filter(tab => (tab.kind === 'connection' || tab.kind === 'local') && (
                         tab.status === 'connected' || tab.status === 'connecting' || tab.status === 'closed'
                       ))
                       .map(tab => (
@@ -817,6 +955,10 @@ export function Shell() {
                             onFocus={() => {}}
                             onTermReady={onActiveTermReady}
                             onReconnect={() => {
+                              if (tab.kind === 'local') {
+                                if (tab.status === 'closed') startLocalTerminal(tab.id);
+                                return;
+                              }
                               if (tab.status === 'closed' && tab.form) handleConnect(tab.id, tab.form);
                             }}
                             terminalSettings={settings.terminal}
@@ -906,9 +1048,12 @@ export function Shell() {
       />
 
       <NewWorkspaceDialog
-        open={showNewWorkspaceDialog}
-        onClose={() => setShowNewWorkspaceDialog(false)}
+        open={showNewWorkspaceDialog || editingWorkspace !== null}
+        mode={editingWorkspace ? 'edit' : 'create'}
+        initialName={editingWorkspace?.name}
+        onClose={closeWorkspaceDialog}
         onCreate={handleCreateWorkspace}
+        onUpdate={submitWorkspaceUpdate}
       />
 
       <ConfirmDeleteDialog

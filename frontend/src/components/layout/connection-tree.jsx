@@ -14,6 +14,7 @@ export function ConnectionTree({
   activeWorkspaceId,
   onSwitchWorkspace,
   onAddWorkspace,
+  onEditWorkspace,
   onDeleteWorkspace,
   nodes,
   onOpenSaved,
@@ -147,6 +148,7 @@ export function ConnectionTree({
             activeId={activeWorkspaceId}
             onSelect={onSwitchWorkspace}
             onAdd={onAddWorkspace}
+            onEdit={onEditWorkspace}
             onDelete={onDeleteWorkspace}
           />
 

@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTheme } from './use-theme';
 import { api } from '@/lib/api';
+import { parseShortcut } from '@/lib/shortcuts';
 
 const STORAGE_KEY = 'ussh-settings';
+const DEFAULT_SHORTCUTS = {
+  cloneTab: 'CmdOrCtrl+Shift+D',
+  closeTab: 'CmdOrCtrl+W',
+};
 const DEFAULT_SETTINGS = {
   density: 'compact',
   restoreTabs: true,
@@ -10,13 +15,16 @@ const DEFAULT_SETTINGS = {
   backdropType: 'acrylic',
   sidebarWidth: 280,
   utilityPanelWidth: 360,
+  shortcuts: { ...DEFAULT_SHORTCUTS },
   terminal: {
     fontSize: 13,
+    fontFamily: '',
     cursorBlink: true,
     copyOnSelect: false,
     rightClickPaste: false,
     scrollback: 5000,
     opacity: 100,
+    shell: '',
   },
   ai: {
     baseURL: '',
@@ -46,6 +54,7 @@ function readSettings() {
     const terminal = stored.terminal || {};
     const ai = stored.ai || {};
     const agent = ai.agent || {};
+    const storedShortcuts = stored.shortcuts || {};
     return {
       density: DENSITIES.includes(stored.density) ? stored.density : DEFAULT_SETTINGS.density,
       restoreTabs: typeof stored.restoreTabs === 'boolean' ? stored.restoreTabs : DEFAULT_SETTINGS.restoreTabs,
@@ -53,8 +62,15 @@ function readSettings() {
       backdropType: BACKDROP_TYPES.includes(stored.backdropType) ? stored.backdropType : DEFAULT_SETTINGS.backdropType,
       sidebarWidth: typeof stored.sidebarWidth === 'number' ? stored.sidebarWidth : DEFAULT_SETTINGS.sidebarWidth,
       utilityPanelWidth: typeof stored.utilityPanelWidth === 'number' ? stored.utilityPanelWidth : DEFAULT_SETTINGS.utilityPanelWidth,
+      shortcuts: Object.fromEntries(Object.entries(DEFAULT_SHORTCUTS).map(([key, value]) => [
+        key,
+        typeof storedShortcuts[key] === 'string' && parseShortcut(storedShortcuts[key])
+          ? storedShortcuts[key]
+          : value,
+      ])),
       terminal: {
         fontSize: FONT_SIZES.includes(terminal.fontSize) ? terminal.fontSize : DEFAULT_SETTINGS.terminal.fontSize,
+        fontFamily: typeof terminal.fontFamily === 'string' ? terminal.fontFamily : DEFAULT_SETTINGS.terminal.fontFamily,
         cursorBlink: typeof terminal.cursorBlink === 'boolean' ? terminal.cursorBlink : DEFAULT_SETTINGS.terminal.cursorBlink,
         copyOnSelect: typeof terminal.copyOnSelect === 'boolean' ? terminal.copyOnSelect : DEFAULT_SETTINGS.terminal.copyOnSelect,
         rightClickPaste: typeof terminal.rightClickPaste === 'boolean' ? terminal.rightClickPaste : DEFAULT_SETTINGS.terminal.rightClickPaste,
@@ -65,6 +81,7 @@ function readSettings() {
           typeof terminal.opacity === 'number' && Number.isFinite(terminal.opacity)
             ? Math.min(MAX_OPACITY, Math.max(MIN_OPACITY, Math.round(terminal.opacity)))
             : DEFAULT_SETTINGS.terminal.opacity,
+        shell: typeof terminal.shell === 'string' ? terminal.shell : DEFAULT_SETTINGS.terminal.shell,
       },
       ai: {
         baseURL: typeof ai.baseURL === 'string' ? ai.baseURL : DEFAULT_SETTINGS.ai.baseURL,

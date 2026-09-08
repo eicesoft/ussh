@@ -26,9 +26,15 @@ export function FetchModels(arg1:string,arg2:string):Promise<Array<string>>;
 
 export function GetCredential(arg1:number):Promise<backend.CredentialView>;
 
+export function GetLocalTerminalSettings():Promise<backend.LocalTerminalSettings>;
+
 export function GetSystemInfo(arg1:string):Promise<backend.SystemInfo>;
 
 export function GetTerminalLogSettings():Promise<backend.TerminalLogSettings>;
+
+export function ListAvailableLocalTerminals():Promise<Array<backend.LocalTerminalOption>>;
+
+export function ListAvailableTerminalFonts():Promise<Array<string>>;
 
 export function ListConnectionNodes():Promise<Array<backend.SavedNode>>;
 
@@ -38,11 +44,15 @@ export function ListTerminalLogs(arg1:string):Promise<Array<backend.TerminalLogF
 
 export function MoveNode(arg1:number,arg2:number):Promise<backend.SavedNode>;
 
+export function PickDownloadDirectory():Promise<string>;
+
 export function PickPrivateKeyFile():Promise<string>;
 
 export function PickSavePath(arg1:string):Promise<string>;
 
 export function PickTerminalLogDirectory():Promise<string>;
+
+export function PickUploadFiles():Promise<Array<backend.LocalUploadFile>>;
 
 export function ReadTerminalLog(arg1:string,arg2:string):Promise<backend.TerminalLogContent>;
 
@@ -60,6 +70,8 @@ export function SetCredential(arg1:number,arg2:backend.SavedCredential):Promise<
 
 export function SetGpuAcceleration(arg1:boolean):Promise<void>;
 
+export function SetLocalTerminalSettings(arg1:backend.LocalTerminalSettings):Promise<void>;
+
 export function SetTerminalLogSettings(arg1:backend.TerminalLogSettings):Promise<void>;
 
 export function SftpDownload(arg1:string,arg2:string,arg3:string):Promise<number>;
@@ -74,11 +86,15 @@ export function SftpRename(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SftpStat(arg1:string,arg2:string):Promise<backend.SftpEntry>;
 
+export function SftpUpload(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function SftpWrite(arg1:string,arg2:string,arg3:Array<number>):Promise<void>;
 
 export function StartAIChat(arg1:string,arg2:string,arg3:string,arg4:string,arg5:Array<backend.AIChatMessage>):Promise<void>;
 
 export function StartAgent(arg1:backend.AgentRequest):Promise<void>;
+
+export function StartLocalTerminal(arg1:string,arg2:backend.TerminalSize):Promise<string>;
 
 export function StopAIChat(arg1:string):Promise<void>;
 

@@ -33,7 +33,9 @@ export function StatusBar({ activeTab, activeConnectionCount, globalStatus, onRe
   const systemInfoRefreshing = activeTab?.systemInfoStatus === 'refreshing';
   const systemInfo = activeTab?.systemInfo;
   const connectionStatus = connected
-    ? `已连接到 ${activeTab.name || activeTab.label}(${activeTab.host}:${activeTab.port || 22})`
+    ? (activeTab?.kind === 'local'
+        ? '已连接本地终端'
+        : `已连接到 ${activeTab.name || activeTab.label}(${activeTab.host}:${activeTab.port || 22})`)
     : globalStatus;
 
   useEffect(() => {

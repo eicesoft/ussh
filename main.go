@@ -61,6 +61,12 @@ func main() {
 		Menu: backend.BuildApplicationMenu(app.App),
 		// 让前端的圆角外侧透出桌面背景，而不是由原生窗口填充颜色。
 		BackgroundColour: &options.RGBA{R: 0, G: 0, B: 0, A: 0},
+		// 由 Wails 原生层接收 Finder/Explorer 拖入的文件路径，避免 WebView
+		// 对隐藏文件和 DOM DragEvent 的平台差异。
+		DragAndDrop: &options.DragAndDrop{
+			EnableFileDrop:     true,
+			DisableWebViewDrop: true,
+		},
 		Mac: &mac.Options{
 			WebviewIsTransparent: true,
 		},

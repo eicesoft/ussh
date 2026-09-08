@@ -423,7 +423,7 @@ export function Shell() {
   );
 
   const openLogList = useCallback(tab => {
-    if (tab?.kind === 'connection') setLogSourceTab(tab);
+    if (tab?.kind === 'connection' || tab?.kind === 'local') setLogSourceTab(tab);
   }, []);
 
   const openSavedLogList = useCallback(node => {
@@ -517,6 +517,51 @@ export function Shell() {
       await handleConnect(id, form);
     },
     [newTab, updateTab, closeSavedDialog, handleConnect],
+  );
+
+  // startLocalTerminal 启动本机 shell 并把标签置为 connected；失败时落到
+  // closed 状态，把错误写进终端缓冲，用户按 Enter 可重试。
+  const startLocalTerminal = useCallback(
+    async tabId => {
+      setTabStatus(tabId, 'connecting');
+      try {
+        const message = await api.startLocalTerminal(tabId, { columns: 100, rows: 30 });
+        setGlobalStatus(message);
+        setTabStatus(tabId, 'connected');
+        // PTY 以默认尺寸启动，这里补同步终端实际尺寸。
+        const term = termsRef.current[tabId];
+        if (term && term.cols > 0 && term.rows > 0) {
+          api.resizeTerminal(tabId, { columns: term.cols, rows: term.rows }).catch(() => {});
+        }
+      } catch (e) {
+        setGlobalStatus(`本地终端启动失败：${e}`);
+        setTabStatus(tabId, 'closed');
+        writeToTab(tabId, `\r\n本地终端启动失败：${e}\r\n`);
+      }
+    },
+    [setTabStatus, termsRef, writeToTab],
+  );
+
+  // openLocalTerminal 在当前工作区最后一个标签后追加一个本地终端标签。
+  const openLocalTerminal = useCallback(() => {
+    const count = workspaceTabs.filter(tab => tab.kind === 'local').length;
+    const id = openTab({
+      kind: 'local',
+      label: count > 0 ? `本地终端 ${count + 1}` : '本地终端',
+      status: 'connecting',
+      buffer: '',
+    });
+    void startLocalTerminal(id);
+  }, [openTab, startLocalTerminal, workspaceTabs]);
+
+  // 关闭本地标签时先终止 PTY，避免遗留僵尸 shell 进程。
+  const handleCloseTab = useCallback(
+    id => {
+      const tab = tabs.find(item => item.id === id);
+      if (tab?.kind === 'local') api.disconnect(id).catch(() => {});
+      closeTab(id);
+    },
+    [tabs, closeTab],
   );
 
   const handleSend = useCallback(async (tabId, data) => {
@@ -618,7 +663,7 @@ export function Shell() {
   );
 
   const terminalActive =
-    activeTab.kind === 'connection' &&
+    (activeTab.kind === 'connection' || activeTab.kind === 'local') &&
     (activeTab.status === 'connected' || activeTab.status === 'connecting' || activeTab.status === 'closed');
   // 线性透明度在低值区间变化不明显：例如 30% 仍会把浅色亚克力压成整块灰色。
   // 使用缓出曲线，让用户降低滑块时能更快看到统一背景，同时 100% 仍保持完全不透明。
@@ -629,7 +674,11 @@ export function Shell() {
   ).length;
   // AI 智能体的流式监听不能因为切到未连接标签或总览而卸载；
   // 具体工具仍只在终端标签中显示，AI 会话按标签自行隔离。
-  const utilityPanelVisible = activeUtility && (terminalActive || activeUtility === 'ai-agent');
+  // 本地终端禁用插件：内置插件均依赖 SSH 连接，本地标签不显示工具按钮与侧栏。
+  const utilityPanelVisible =
+    activeUtility &&
+    activeTab.kind !== 'local' &&
+    (terminalActive || activeUtility === 'ai-agent');
 
   const pluginContext = useMemo(() => ({
     activeTab,
@@ -715,11 +764,12 @@ export function Shell() {
             tabs={workspaceTabs}
             activeId={activeId}
             onSelect={selectTab}
-            onClose={closeTab}
+            onClose={handleCloseTab}
             onDisconnect={disconnectTab}
             onClone={cloneTab}
             onTogglePinned={toggleTabPinned}
             onViewLogs={openLogList}
+            onNewLocalTerminal={openLocalTerminal}
           />
         </div>
       </header>
@@ -791,7 +841,9 @@ export function Shell() {
                   ) : activeTab.kind === 'log' ? (
                     <TerminalLogView log={activeTab.log} />
                   ) : terminalActive ? (
-                    <TerminalActions active={activeUtility} onToggle={setActiveUtility} />
+                    activeTab.kind === 'connection' ? (
+                      <TerminalActions active={activeUtility} onToggle={setActiveUtility} />
+                    ) : null
                   ) : (
                     <ConnectionForm
                       initialForm={activeTab.form}
@@ -801,7 +853,7 @@ export function Shell() {
                   )}
                   <div className="pointer-events-none absolute inset-0">
                     {tabs
-                      .filter(tab => tab.kind === 'connection' && (
+                      .filter(tab => (tab.kind === 'connection' || tab.kind === 'local') && (
                         tab.status === 'connected' || tab.status === 'connecting' || tab.status === 'closed'
                       ))
                       .map(tab => (
@@ -817,6 +869,10 @@ export function Shell() {
                             onFocus={() => {}}
                             onTermReady={onActiveTermReady}
                             onReconnect={() => {
+                              if (tab.kind === 'local') {
+                                if (tab.status === 'closed') startLocalTerminal(tab.id);
+                                return;
+                              }
                               if (tab.status === 'closed' && tab.form) handleConnect(tab.id, tab.form);
                             }}
                             terminalSettings={settings.terminal}

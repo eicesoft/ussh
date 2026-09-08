@@ -80,6 +80,8 @@ export function StartAIChat(arg1:string,arg2:string,arg3:string,arg4:string,arg5
 
 export function StartAgent(arg1:backend.AgentRequest):Promise<void>;
 
+export function StartLocalTerminal(arg1:string,arg2:backend.TerminalSize):Promise<string>;
+
 export function StopAIChat(arg1:string):Promise<void>;
 
 export function StopAgent(arg1:string):Promise<void>;

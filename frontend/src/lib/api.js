@@ -34,6 +34,11 @@ export const api = {
   async disconnect(tabId) {
     return appApi()?.Disconnect(tabId);
   },
+  async startLocalTerminal(tabId, size) {
+    const app = appApi();
+    if (!app?.StartLocalTerminal) throw new Error('本地终端服务不可用，请在 uSSH 应用中运行。');
+    return app.StartLocalTerminal(tabId, size);
+  },
   async sendInput(tabId, data) {
     return appApi()?.SendInput(tabId, data);
   },

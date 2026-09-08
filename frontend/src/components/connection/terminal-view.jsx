@@ -32,14 +32,51 @@ export function TerminalView({ tab, active = true, onSend, onResize, onFocus, on
 
   useEffect(() => {
     if (!hostRef.current) return;
+    // 终端调色板：低饱和暗色风格，覆盖 xterm 默认的高饱和经典色，
+    // SSH 与本地终端共用同一套 ANSI 颜色。
+    const terminalTheme = {
+      cursor: '#d0d4cb',
+      cursorAccent: '#1d2225',
+      foreground: '#c7ccc3',
+      black: '#31363a',
+      red: '#d8868b',
+      green: '#8ea97b',
+      yellow: '#cbb46f',
+      blue: '#89a5c9',
+      magenta: '#bf9bc0',
+      cyan: '#7fb5b0',
+      white: '#c2c7c4',
+      brightBlack: '#787f7c',
+      brightRed: '#e39a9e',
+      brightGreen: '#a3bd90',
+      brightYellow: '#d9c48d',
+      brightBlue: '#9cb8d8',
+      brightMagenta: '#cdafcd',
+      brightCyan: '#94c6c1',
+      brightWhite: '#e6e9e4',
+    };
     const term = new Terminal({
       cursorBlink: terminalSettings?.cursorBlink ?? true,
-      fontFamily: 'Menlo, Consolas, "Courier New", monospace',
+      // Nerd Font Mono 覆盖提示符图标与 powerline/emoji 类符号，缺失时逐级
+      // 回退到系统符号与 emoji 字体，避免 canvas 渲染画方框。
+      fontFamily: [
+        '"FiraCode Nerd Font Mono"',
+        '"JetBrainsMono Nerd Font Mono"',
+        '"Hack Nerd Font Mono"',
+        '"Agave Nerd Font Mono"',
+        'Menlo',
+        'Consolas',
+        '"Courier New"',
+        '"Apple Symbols"',
+        '"Apple Color Emoji"',
+        '"Segoe UI Emoji"',
+        'monospace',
+      ].join(', '),
       fontSize: terminalSettings?.fontSize ?? 13,
       // 画布背景完全透明：透明度由外层终端容器统一承担，文字保持不透明。
       theme: {
+        ...terminalTheme,
         background: '#0b122000',
-        foreground: '#e2e8f0',
         selectionBackground: '#5f718a',
         selectionForeground: '#ffffff',
         selectionInactiveBackground: '#52647c',
@@ -213,7 +250,7 @@ export function TerminalView({ tab, active = true, onSend, onResize, onFocus, on
             </span>
             <div className="text-center">
               <p className="text-sm font-medium">正在连接 {tab.label}</p>
-              <p className="mt-1 text-xs text-slate-400">正在建立安全 SSH 会话…</p>
+              <p className="mt-1 text-xs text-slate-400">{tab.kind === 'local' ? '正在启动本地 shell…' : '正在建立安全 SSH 会话…'}</p>
             </div>
           </div>
         </div>

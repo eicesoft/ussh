@@ -3,6 +3,7 @@ module ussh
 go 1.25.0
 
 require (
+	github.com/creack/pty v1.1.24
 	github.com/pkg/sftp v1.13.11
 	github.com/wailsapp/wails/v2 v2.14.0
 	github.com/zalando/go-keyring v0.2.8

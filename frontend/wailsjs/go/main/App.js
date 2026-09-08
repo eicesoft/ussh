@@ -158,6 +158,10 @@ export function StartAgent(arg1) {
   return window['go']['main']['App']['StartAgent'](arg1);
 }
 
+export function StartLocalTerminal(arg1, arg2) {
+  return window['go']['main']['App']['StartLocalTerminal'](arg1, arg2);
+}
+
 export function StopAIChat(arg1) {
   return window['go']['main']['App']['StopAIChat'](arg1);
 }

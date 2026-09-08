@@ -180,15 +180,27 @@ func (a *App) DeleteTerminalLog(connectionID, name string) error {
 	return nil
 }
 
-// isActiveLogFile 检查指定文件名是否属于当前正在记录的活跃会话，避免误删正在写入的日志。
+// isActiveLogFile 检查指定文件名是否属于当前正在记录的活跃会话（SSH 或本地），
+// 避免误删正在写入的日志。
 func (a *App) isActiveLogFile(name string) bool {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	for _, conn := range a.connections {
 		if conn.logger == nil || conn.logger.file == nil {
 			continue
 		}
 		if filepath.Base(conn.logger.file.Name()) == name {
+			a.mu.Unlock()
+			return true
+		}
+	}
+	a.mu.Unlock()
+	a.localMu.Lock()
+	defer a.localMu.Unlock()
+	for _, sess := range a.localTerms {
+		if sess.logger == nil || sess.logger.file == nil {
+			continue
+		}
+		if filepath.Base(sess.logger.file.Name()) == name {
 			return true
 		}
 	}

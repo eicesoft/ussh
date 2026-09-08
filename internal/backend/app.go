@@ -111,6 +111,9 @@ type App struct {
 	ctx         context.Context
 	mu          sync.Mutex
 	connections map[string]*sshConnection
+	// localMu/localTerms 持有本地 PTY 会话（key 为 tabId），与 SSH 会话互斥。
+	localMu    sync.Mutex
+	localTerms map[string]*localSession
 	db          *sql.DB
 	aiMu        sync.Mutex
 	aiRequests  map[string]context.CancelFunc
@@ -149,6 +152,7 @@ func (a *App) writeToTerminal(tabId string, data string) error {
 func NewApp() *App {
 	return &App{
 		connections:    map[string]*sshConnection{},
+		localTerms:     map[string]*localSession{},
 		aiRequests:     map[string]context.CancelFunc{},
 		taps:           map[string][]tapEntry{},
 		agentRuns:      map[string]bool{},
@@ -188,6 +192,23 @@ func (a *App) shutdown(ctx context.Context) {
 			_ = c.logger.closeWithError(nil)
 		}
 		_ = c.client.Close()
+	}
+
+	a.localMu.Lock()
+	localSessions := make([]*localSession, 0, len(a.localTerms))
+	for _, s := range a.localTerms {
+		localSessions = append(localSessions, s)
+	}
+	a.localTerms = map[string]*localSession{}
+	a.localMu.Unlock()
+	for _, s := range localSessions {
+		_ = s.pty.Close()
+		if s.cmd.Process != nil {
+			_ = s.cmd.Process.Kill()
+		}
+		if s.logger != nil {
+			_ = s.logger.closeWithError(nil)
+		}
 	}
 	if a.db != nil {
 		_ = a.db.Close()
@@ -356,7 +377,8 @@ func (a *App) GetSystemInfo(tabId string) (SystemInfo, error) {
 		return parseSystemInfo(info, string(output))
 	}
 	a.mu.Unlock()
-	return SystemInfo{}, fmt.Errorf("未建立 SSH 连接")
+	// 无 SSH 会话时回退到本地 PTY 会话（若存在）。
+	return a.localSystemInfo(tabId)
 }
 
 func parseSystemInfo(info SystemInfo, output string) (SystemInfo, error) {
@@ -560,11 +582,13 @@ func (a *App) watchSession(tabId string, session *ssh.Session) {
 
 func (a *App) SendInput(tabId string, input string) error {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	conn, ok := a.connections[tabId]
 	if !ok {
-		return fmt.Errorf("未建立 SSH 连接")
+		a.mu.Unlock()
+		// 本地 PTY 会话走独立通道，与 SSH 互斥。
+		return a.sendLocalInput(tabId, input)
 	}
+	defer a.mu.Unlock()
 	// 先记录输入，再写入 PTY。PTY 开启 ECHO 时，远端回显可能在 Write
 	// 返回前就通过 stdout 到达；若顺序相反，回显会被日志排到输入块之前。
 	if conn.logger != nil {
@@ -578,9 +602,13 @@ func (a *App) SendInput(tabId string, input string) error {
 
 func (a *App) ResizeTerminal(tabId string, size TerminalSize) error {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	conn, ok := a.connections[tabId]
-	if !ok || size.Columns < 1 || size.Rows < 1 {
+	if !ok {
+		a.mu.Unlock()
+		return a.resizeLocalTerminal(tabId, size)
+	}
+	defer a.mu.Unlock()
+	if size.Columns < 1 || size.Rows < 1 {
 		return nil
 	}
 	return conn.session.WindowChange(size.Rows, size.Columns)
@@ -594,6 +622,8 @@ func (a *App) Disconnect(tabId string) error {
 	}
 	a.mu.Unlock()
 	if !ok {
+		// 无 SSH 会话时尝试清理本地 PTY 会话（若存在）。
+		a.disconnectLocal(tabId)
 		return nil
 	}
 	if conn.keepaliveCancel != nil {

@@ -8,6 +8,8 @@ const DEFAULT_SETTINGS = {
   restoreTabs: true,
   gpuAcceleration: true,
   backdropType: 'acrylic',
+  sidebarWidth: 280,
+  utilityPanelWidth: 360,
   terminal: {
     fontSize: 13,
     cursorBlink: true,
@@ -49,6 +51,8 @@ function readSettings() {
       restoreTabs: typeof stored.restoreTabs === 'boolean' ? stored.restoreTabs : DEFAULT_SETTINGS.restoreTabs,
       gpuAcceleration: typeof stored.gpuAcceleration === 'boolean' ? stored.gpuAcceleration : DEFAULT_SETTINGS.gpuAcceleration,
       backdropType: BACKDROP_TYPES.includes(stored.backdropType) ? stored.backdropType : DEFAULT_SETTINGS.backdropType,
+      sidebarWidth: typeof stored.sidebarWidth === 'number' ? stored.sidebarWidth : DEFAULT_SETTINGS.sidebarWidth,
+      utilityPanelWidth: typeof stored.utilityPanelWidth === 'number' ? stored.utilityPanelWidth : DEFAULT_SETTINGS.utilityPanelWidth,
       terminal: {
         fontSize: FONT_SIZES.includes(terminal.fontSize) ? terminal.fontSize : DEFAULT_SETTINGS.terminal.fontSize,
         cursorBlink: typeof terminal.cursorBlink === 'boolean' ? terminal.cursorBlink : DEFAULT_SETTINGS.terminal.cursorBlink,
@@ -106,9 +110,14 @@ export function useSettings() {
     },
     [setTheme, settings.gpuAcceleration, settings.backdropType],
   );
+  const patchSettings = useCallback(patch => {
+    setSettings(prev => ({ ...prev, ...patch }));
+  }, []);
+
 
   return {
     settings: { ...settings, theme },
     applySettings,
+    patchSettings,
   };
 }

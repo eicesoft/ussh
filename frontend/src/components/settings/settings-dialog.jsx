@@ -54,6 +54,38 @@ export function SettingsDialog({
   const [modelLoading, setModelLoading] = useState(false);
   const [modelError, setModelError] = useState('');
   const [modelSearch, setModelSearch] = useState('');
+  const [logSettings, setLogSettings] = useState(null);
+  const [logDirty, setLogDirty] = useState(false);
+  const [logError, setLogError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    setLogSettings(null);
+    setLogDirty(false);
+    setLogError('');
+    api.getTerminalLogSettings().then(value => {
+      if (active) setLogSettings(value);
+    }).catch(error => {
+      if (active) setLogError(String(error));
+    });
+    return () => { active = false; };
+  }, [open]);
+
+  const updateLogSettings = change => {
+    setLogSettings(current => ({ ...current, ...change }));
+    setLogDirty(true);
+    setLogError('');
+  };
+  const pickLogDirectory = async () => {
+    try {
+      const path = await api.pickTerminalLogDirectory();
+      if (path) updateLogSettings({ savePath: path });
+    } catch (error) {
+      setLogError(String(error));
+    }
+  };
 
   const visibleModels = useMemo(() => {
     const saved = draft.ai?.visibleModels || [];
@@ -150,9 +182,18 @@ export function SettingsDialog({
   const filteredModels = models.filter(modelName =>
     modelName.toLocaleLowerCase().includes(modelSearch.trim().toLocaleLowerCase()),
   );
-  const save = () => {
-    onSave(draft);
-    onClose();
+  const save = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      if (logDirty && logSettings) await api.setTerminalLogSettings(logSettings);
+      await onSave(draft);
+      onClose();
+    } catch (error) {
+      setLogError(String(error));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -185,7 +226,27 @@ export function SettingsDialog({
               <Bot className="h-4 w-4" />
               AI 智能体
             </TabsTrigger>
+            <TabsTrigger value="logs" className="flex-1 gap-2">日志</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="logs" className="mt-4 space-y-4">
+            {logSettings ? <>
+              <SettingRow label="记录终端日志" description="保存终端输入和输出。修改后对新建或重新连接的会话生效。">
+                <Switch checked={logSettings.enabled} disabled={saving} onCheckedChange={enabled => updateLogSettings({ enabled })} aria-label="记录终端日志" />
+              </SettingRow>
+              <div className="space-y-2">
+                <label htmlFor="terminal-log-path" className="text-sm font-medium">日志保存路径</label>
+                <Input id="terminal-log-path" value={logSettings.savePath} disabled={saving} onChange={event => updateLogSettings({ savePath: event.target.value })} placeholder={logSettings.defaultPath} />
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" disabled={saving} onClick={pickLogDirectory}>选择目录</Button>
+                  <Button variant="ghost" size="sm" disabled={saving} onClick={() => updateLogSettings({ savePath: logSettings.defaultPath })}>恢复默认路径</Button>
+                </div>
+                <p className="break-all text-xs text-muted-foreground">默认路径：{logSettings.defaultPath}</p>
+                <p className="text-xs text-muted-foreground">按标签页分目录，文件名为 年月日-时分秒-会话ID.jsonl。已有日志保留在原位置。</p>
+                <p className="text-xs text-muted-foreground">日志会保存输入内容，可能包含命令中或交互输入的密码等敏感信息。</p>
+              </div>
+            </> : <p className="text-sm text-muted-foreground">{logError ? '无法加载日志设置。' : '正在加载日志设置…'}</p>}
+          </TabsContent>
 
           <TabsContent value="appearance" className="mt-4 space-y-4">
             <SettingRow label="主题" description="选择应用的颜色主题。">
@@ -418,9 +479,10 @@ export function SettingsDialog({
           <Settings className="h-3.5 w-3.5" />
           未保存的修改将在关闭时丢弃。
         </div>
+        {logError && <p role="alert" className="text-xs text-destructive">{logError}</p>}
         <DialogFooter>
           <Button type="button" variant="secondary" onClick={onClose}>取消</Button>
-          <Button type="button" onClick={save}>保存</Button>
+          <Button type="button" disabled={saving} onClick={save}>{saving ? '保存中…' : '保存'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

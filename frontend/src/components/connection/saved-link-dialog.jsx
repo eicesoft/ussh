@@ -30,7 +30,7 @@ import {
   SelectContent,
   SelectItem,
 } from '@/components/ui/select';
-import { FileText, KeyRound, Lock, X } from 'lucide-react';
+import { FileText, KeyRound, Lock, Timer, X } from 'lucide-react';
 
 const blankForm = {
   name: '',
@@ -47,6 +47,8 @@ const blankForm = {
   savePrivateKey: false,
   savePassphrase: false,
   saveKeyFile: false,
+  keepaliveEnabled: false,
+  keepaliveInterval: 30,
 };
 
 // 槽位三态：undefined = 保持原值不动；'' = 清除；非空 = 覆盖。
@@ -85,6 +87,8 @@ export function SavedLinkDialog({
       username: initial?.username ?? '',
       parentId: initial?.parentId ?? 0,
       authType: initial?.authType || 'password',
+      keepaliveEnabled: initial?.keepaliveEnabled ?? false,
+      keepaliveInterval: initial?.keepaliveInterval ?? 30,
       // 编辑模式下凭据字段保持空，用户输入即覆盖；Switch 通过 credential 反映"已保存"
       savePassword: !!cred.hasPassword,
       savePrivateKey: !!cred.hasPrivateKey,
@@ -139,6 +143,8 @@ export function SavedLinkDialog({
         username: form.username.trim(),
         parentId: Number(form.parentId) || 0,
         authType: form.authType,
+        keepaliveEnabled: form.keepaliveEnabled,
+        keepaliveInterval: Number(form.keepaliveInterval) || 30,
         credential: {
           password: slotValue(form.savePassword, form.password, credential?.hasPassword, editMode),
           privateKey: slotValue(form.savePrivateKey, form.privateKey, credential?.hasPrivateKey, editMode),
@@ -441,6 +447,40 @@ export function SavedLinkDialog({
               />
             </TabsContent>
           </Tabs>
+
+          <div className="rounded-lg border border-border bg-muted/30 p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Timer className="h-4 w-4 text-muted-foreground" />
+                <Label htmlFor="link-keepalive" className="text-sm font-medium">连接保活</Label>
+              </div>
+              <Switch
+                id="link-keepalive"
+                checked={form.keepaliveEnabled}
+                onCheckedChange={value => setField('keepaliveEnabled', value)}
+              />
+            </div>
+            {form.keepaliveEnabled && (
+              <div className="mt-3 flex items-center gap-3">
+                <div className="flex-1 space-y-1.5">
+                  <Label htmlFor="link-keepalive-interval" className="text-xs text-muted-foreground">
+                    保活间隔（秒）
+                  </Label>
+                  <Input
+                    id="link-keepalive-interval"
+                    type="number"
+                    min={10}
+                    value={form.keepaliveInterval}
+                    onChange={e => setField('keepaliveInterval', e.target.value)}
+                    className="h-8"
+                  />
+                </div>
+                <p className="mt-5 text-xs text-muted-foreground">
+                  定期发送 SSH keepalive 请求，防止长时间空闲后断开连接
+                </p>
+              </div>
+            )}
+          </div>
 
           {error && <div className="text-xs text-destructive">{error}</div>}
 

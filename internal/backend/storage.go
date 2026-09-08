@@ -14,16 +14,18 @@ import (
 )
 
 type SavedNode struct {
-	ID        int64  `json:"id"`
-	ParentID  int64  `json:"parentId"`
-	Type      string `json:"type"`
-	Name      string `json:"name"`
-	Host      string `json:"host"`
-	Port      int    `json:"port"`
-	Username  string `json:"username"`
-	AuthType  string `json:"authType"`
-	Color     string `json:"color"`
-	SortOrder int64  `json:"sortOrder"`
+	ID                int64  `json:"id"`
+	ParentID          int64  `json:"parentId"`
+	Type              string `json:"type"`
+	Name              string `json:"name"`
+	Host              string `json:"host"`
+	Port              int    `json:"port"`
+	Username          string `json:"username"`
+	AuthType          string `json:"authType"`
+	Color             string `json:"color"`
+	SortOrder         int64  `json:"sortOrder"`
+	KeepaliveEnabled  bool   `json:"keepaliveEnabled"`
+	KeepaliveInterval int    `json:"keepaliveInterval"`
 }
 
 // CredentialView 仅暴露"是否已保存"的标记，不返回明文。
@@ -115,6 +117,14 @@ func openStore() (*sql.DB, error) {
 		_ = db.Close()
 		return nil, err
 	}
+	if err := ensureColumn(db, "connection_nodes", "keepalive_enabled", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if err := ensureColumn(db, "connection_nodes", "keepalive_interval", "INTEGER NOT NULL DEFAULT 30"); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	return db, nil
 }
 
@@ -179,7 +189,7 @@ func (a *App) ListConnectionNodes() ([]SavedNode, error) {
 	if a.db == nil {
 		return nil, fmt.Errorf("本地连接库尚未就绪")
 	}
-	rows, err := a.db.Query(`SELECT id, parent_id, type, name, host, port, username, auth_type, color, sort_order FROM connection_nodes ORDER BY parent_id, type DESC, sort_order, name COLLATE NOCASE, id`)
+	rows, err := a.db.Query(`SELECT id, parent_id, type, name, host, port, username, auth_type, color, sort_order, keepalive_enabled, keepalive_interval FROM connection_nodes ORDER BY parent_id, type DESC, sort_order, name COLLATE NOCASE, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +197,7 @@ func (a *App) ListConnectionNodes() ([]SavedNode, error) {
 	nodes := []SavedNode{}
 	for rows.Next() {
 		var node SavedNode
-		if err := rows.Scan(&node.ID, &node.ParentID, &node.Type, &node.Name, &node.Host, &node.Port, &node.Username, &node.AuthType, &node.Color, &node.SortOrder); err != nil {
+		if err := rows.Scan(&node.ID, &node.ParentID, &node.Type, &node.Name, &node.Host, &node.Port, &node.Username, &node.AuthType, &node.Color, &node.SortOrder, &node.KeepaliveEnabled, &node.KeepaliveInterval); err != nil {
 			return nil, err
 		}
 		nodes = append(nodes, node)
@@ -335,8 +345,8 @@ func (a *App) UpdateSSHLink(id int64, parentID int64, node SavedNode) (SavedNode
 			return SavedNode{}, err
 		}
 	}
-	res, err := a.db.Exec(`UPDATE connection_nodes SET parent_id = ?, sort_order = ?, name = ?, host = ?, port = ?, username = ?, auth_type = ? WHERE id = ?`,
-		parentID, sortOrder, node.Name, node.Host, node.Port, node.Username, node.AuthType, id)
+	res, err := a.db.Exec(`UPDATE connection_nodes SET parent_id = ?, sort_order = ?, name = ?, host = ?, port = ?, username = ?, auth_type = ?, keepalive_enabled = ?, keepalive_interval = ? WHERE id = ?`,
+		parentID, sortOrder, node.Name, node.Host, node.Port, node.Username, node.AuthType, node.KeepaliveEnabled, node.KeepaliveInterval, id)
 	if err != nil {
 		return SavedNode{}, err
 	}
@@ -347,6 +357,7 @@ func (a *App) UpdateSSHLink(id int64, parentID int64, node SavedNode) (SavedNode
 		ID: id, ParentID: parentID, Type: "ssh",
 		Name: node.Name, Host: node.Host, Port: node.Port,
 		Username: node.Username, AuthType: node.AuthType, SortOrder: sortOrder,
+		KeepaliveEnabled: node.KeepaliveEnabled, KeepaliveInterval: node.KeepaliveInterval,
 	}, nil
 }
 
@@ -359,8 +370,8 @@ func (a *App) CloneSSHLink(id int64) (SavedNode, error) {
 	}
 	var src SavedNode
 	var srcType string
-	if err := a.db.QueryRow(`SELECT id, parent_id, type, name, host, port, username, auth_type, color FROM connection_nodes WHERE id = ?`, id).
-		Scan(&src.ID, &src.ParentID, &srcType, &src.Name, &src.Host, &src.Port, &src.Username, &src.AuthType, &src.Color); err != nil {
+	if err := a.db.QueryRow(`SELECT id, parent_id, type, name, host, port, username, auth_type, color, keepalive_enabled, keepalive_interval FROM connection_nodes WHERE id = ?`, id).
+		Scan(&src.ID, &src.ParentID, &srcType, &src.Name, &src.Host, &src.Port, &src.Username, &src.AuthType, &src.Color, &src.KeepaliveEnabled, &src.KeepaliveInterval); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return SavedNode{}, fmt.Errorf("节点不存在")
 		}
@@ -370,13 +381,15 @@ func (a *App) CloneSSHLink(id int64) (SavedNode, error) {
 		return SavedNode{}, fmt.Errorf("只能克隆 SSH 节点")
 	}
 	clone, err := a.createNode(SavedNode{
-		ParentID: src.ParentID,
-		Type:     "ssh",
-		Name:     strings.TrimSpace(src.Name) + " 副本",
-		Host:     src.Host,
-		Port:     src.Port,
-		Username: src.Username,
-		AuthType: src.AuthType,
+		ParentID:          src.ParentID,
+		Type:              "ssh",
+		Name:              strings.TrimSpace(src.Name) + " 副本",
+		Host:              src.Host,
+		Port:              src.Port,
+		Username:          src.Username,
+		AuthType:          src.AuthType,
+		KeepaliveEnabled:  src.KeepaliveEnabled,
+		KeepaliveInterval: src.KeepaliveInterval,
 	})
 	if err != nil {
 		return SavedNode{}, err
@@ -663,8 +676,8 @@ func (a *App) createNode(node SavedNode) (SavedNode, error) {
 	if err := a.db.QueryRow(`SELECT COALESCE(MAX(sort_order), -1) + 1 FROM connection_nodes WHERE parent_id = ? AND type = ?`, node.ParentID, node.Type).Scan(&node.SortOrder); err != nil {
 		return SavedNode{}, err
 	}
-	result, err := a.db.Exec(`INSERT INTO connection_nodes(parent_id, type, name, host, port, username, auth_type, color, sort_order, created_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		node.ParentID, node.Type, node.Name, node.Host, node.Port, node.Username, node.AuthType, node.Color, node.SortOrder, time.Now().Unix())
+	result, err := a.db.Exec(`INSERT INTO connection_nodes(parent_id, type, name, host, port, username, auth_type, color, sort_order, keepalive_enabled, keepalive_interval, created_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		node.ParentID, node.Type, node.Name, node.Host, node.Port, node.Username, node.AuthType, node.Color, node.SortOrder, node.KeepaliveEnabled, node.KeepaliveInterval, time.Now().Unix())
 	if err != nil {
 		return SavedNode{}, err
 	}

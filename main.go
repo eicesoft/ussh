@@ -49,7 +49,7 @@ func main() {
 		backdropType = windows.Acrylic
 	}
 	err := wails.Run(&options.App{
-		Title:     "uSSH",
+		Title:     "uSSH 🥤",
 		Width:     1280,
 		Height:    820,
 		MinWidth:  920,

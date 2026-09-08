@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Lock, KeyRound, FileText } from 'lucide-react';
+import { Loader2, Lock, KeyRound, FileText, Timer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 
 const blankForm = {
   host: '',
@@ -16,6 +17,8 @@ const blankForm = {
   keyFile: '',
   authType: 'password',
   savedNodeId: 0,
+  keepaliveEnabled: false,
+  keepaliveInterval: 30,
 };
 
 export function ConnectionForm({ initialForm = blankForm, onConnect, onPickFile }) {
@@ -36,6 +39,7 @@ export function ConnectionForm({ initialForm = blankForm, onConnect, onPickFile 
       await onConnect({
         ...form,
         port: Number(form.port) || 22,
+        keepaliveInterval: Number(form.keepaliveInterval) || 30,
         password: form.authType === 'password' ? form.password : '',
         privateKey: form.authType === 'key' ? form.privateKey : '',
         keyFile: form.authType === 'keyfile' ? form.keyFile : '',
@@ -174,6 +178,40 @@ export function ConnectionForm({ initialForm = blankForm, onConnect, onPickFile 
           </div>
         </TabsContent>
       </Tabs>
+
+      <div className="mt-5 rounded-lg border border-border bg-muted/30 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Timer className="h-4 w-4 text-muted-foreground" />
+            <Label htmlFor="keepalive" className="text-sm font-medium">连接保活</Label>
+          </div>
+          <Switch
+            id="keepalive"
+            checked={form.keepaliveEnabled}
+            onCheckedChange={value => setField('keepaliveEnabled', value)}
+          />
+        </div>
+        {form.keepaliveEnabled && (
+          <div className="mt-3 flex items-center gap-3">
+            <div className="flex-1 space-y-1.5">
+              <Label htmlFor="keepalive-interval" className="text-xs text-muted-foreground">
+                保活间隔（秒）
+              </Label>
+              <Input
+                id="keepalive-interval"
+                type="number"
+                min={10}
+                value={form.keepaliveInterval}
+                onChange={e => setField('keepaliveInterval', e.target.value)}
+                className="h-8"
+              />
+            </div>
+            <p className="mt-5 text-xs text-muted-foreground">
+              定期发送 SSH keepalive 请求，防止长时间空闲后断开连接
+            </p>
+          </div>
+        )}
+      </div>
 
       {error && <div className="mt-3 text-xs text-destructive">{error}</div>}
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, Copy, LayoutDashboard, Pin, PinOff, Unplug, X } from 'lucide-react';
+import { ChevronDown, Copy, FileText, LayoutDashboard, Pin, PinOff, Unplug, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -44,7 +44,7 @@ const authText = {
   keyfile: '密钥文件',
 };
 
-export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onClone, onTogglePinned }) {
+export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onClone, onTogglePinned, onViewLogs }) {
   const connectionTabs = tabs.filter(tab => tab.kind !== 'dashboard');
   const scrollRef = useRef(null);
   const [contextTabId, setContextTabId] = useState(null);
@@ -174,6 +174,8 @@ export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onClon
             className="shrink-0 text-primary"
             style={{ width: 'var(--density-tab-icon-size)', height: 'var(--density-tab-icon-size)' }}
           />
+        ) : tab.kind === 'log' ? (
+          <FileText className="h-[var(--density-tab-icon-size)] w-[var(--density-tab-icon-size)] shrink-0 text-primary" />
         ) : (
           <>
             {tab.color && (
@@ -225,7 +227,7 @@ export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onClon
         open={contextTabId === tab.id}
         onOpenChange={open => !open && setContextTabId(null)}
       >
-        {tab.kind === 'dashboard' ? (
+        {tab.kind !== 'connection' && tab.kind !== 'log' ? (
           <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
         ) : (
           <Tooltip>
@@ -237,25 +239,37 @@ export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onClon
               align="start"
               className="w-64 bg-popover px-3 py-2.5 text-popover-foreground shadow-md"
             >
-              <p className="truncate whitespace-nowrap text-xs font-medium leading-none">
-                {tab.name || tab.label}
-              </p>
-              <div className="mt-2 grid grid-cols-[2rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-[11px] leading-none">
-                <span className="text-muted-foreground">主机</span>
-                <span className="truncate whitespace-nowrap">{tab.host || '—'}:{tab.port || 22}</span>
-                <span className="text-muted-foreground">用户</span>
-                <span className="truncate whitespace-nowrap">{tab.username || '—'}</span>
-                <span className="text-muted-foreground">认证</span>
-                <span className="truncate whitespace-nowrap">{authText[tab.authType] ?? '—'}</span>
-                <span className="text-muted-foreground">状态</span>
-                <span className="truncate whitespace-nowrap">{statusText[tab.status] ?? tab.status}</span>
-              </div>
+              {tab.kind === 'log' ? (
+                <>
+                  <p className="truncate whitespace-nowrap text-xs font-medium leading-none">{tab.log?.name || tab.label}</p>
+                  <div className="mt-2 grid grid-cols-[3rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-[11px] leading-none">
+                    <span className="text-muted-foreground">大小</span>
+                    <span className="truncate whitespace-nowrap">{tab.log?.size != null ? `${tab.log.size} bytes` : '—'}</span>
+                    <span className="text-muted-foreground">日期</span>
+                    <span className="truncate whitespace-nowrap">{tab.log?.modifiedAt ? new Date(tab.log.modifiedAt).toLocaleString() : '—'}</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="truncate whitespace-nowrap text-xs font-medium leading-none">{tab.name || tab.label}</p>
+                  <div className="mt-2 grid grid-cols-[2rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-[11px] leading-none">
+                    <span className="text-muted-foreground">主机</span>
+                    <span className="truncate whitespace-nowrap">{tab.host || '—'}:{tab.port || 22}</span>
+                    <span className="text-muted-foreground">用户</span>
+                    <span className="truncate whitespace-nowrap">{tab.username || '—'}</span>
+                    <span className="text-muted-foreground">认证</span>
+                    <span className="truncate whitespace-nowrap">{authText[tab.authType] ?? '—'}</span>
+                    <span className="text-muted-foreground">状态</span>
+                    <span className="truncate whitespace-nowrap">{statusText[tab.status] ?? tab.status}</span>
+                  </div>
+                </>
+              )}
             </TooltipContent>
           </Tooltip>
         )}
         <DropdownMenuContent align="start" side="bottom" className="min-w-[9rem]">
           <DropdownMenuItem
-            disabled={tab.status !== 'connected' && tab.status !== 'connecting'}
+            disabled={tab.kind !== 'connection' || (tab.status !== 'connected' && tab.status !== 'connecting')}
             onSelect={() => onDisconnect(tab)}
           >
             <Unplug className="h-3.5 w-3.5" />
@@ -266,11 +280,15 @@ export function TabBar({ tabs, activeId, onSelect, onClose, onDisconnect, onClon
             关闭
           </DropdownMenuItem>
           <DropdownMenuItem
-            disabled={tab.kind === 'dashboard' || !tab.form}
+            disabled={tab.kind !== 'connection' || !tab.form}
             onSelect={() => onClone(tab)}
           >
             <Copy className="h-3.5 w-3.5" />
             克隆标签页
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={tab.kind !== 'connection'} onSelect={() => onViewLogs?.(tab)}>
+            <FileText className="h-3.5 w-3.5" />
+            查看日志
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => onTogglePinned(tab.id)}>

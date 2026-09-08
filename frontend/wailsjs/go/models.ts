@@ -175,6 +175,8 @@ export namespace backend {
 	    keyFile: string;
 	    authType: string;
 	    savedNodeId: number;
+	    keepaliveEnabled: boolean;
+	    keepaliveInterval: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new ConnectionConfig(source);
@@ -191,6 +193,8 @@ export namespace backend {
 	        this.keyFile = source["keyFile"];
 	        this.authType = source["authType"];
 	        this.savedNodeId = source["savedNodeId"];
+	        this.keepaliveEnabled = source["keepaliveEnabled"];
+	        this.keepaliveInterval = source["keepaliveInterval"];
 	    }
 	}
 	export class CredentialView {
@@ -258,6 +262,8 @@ export namespace backend {
 	    authType: string;
 	    color: string;
 	    sortOrder: number;
+	    keepaliveEnabled: boolean;
+	    keepaliveInterval: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new SavedNode(source);
@@ -275,6 +281,8 @@ export namespace backend {
 	        this.authType = source["authType"];
 	        this.color = source["color"];
 	        this.sortOrder = source["sortOrder"];
+	        this.keepaliveEnabled = source["keepaliveEnabled"];
+	        this.keepaliveInterval = source["keepaliveInterval"];
 	    }
 	}
 	export class SftpEntry {
@@ -366,6 +374,73 @@ export namespace backend {
 	        this.shell = source["shell"];
 	        this.cwd = source["cwd"];
 	        this.uptime = source["uptime"];
+	    }
+	}
+	export class TerminalLogContent {
+	    name: string;
+	    content: string;
+	    truncated: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new TerminalLogContent(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.content = source["content"];
+	        this.truncated = source["truncated"];
+	    }
+	}
+	export class TerminalLogFile {
+	    name: string;
+	    size: number;
+	    // Go type: time
+	    modifiedAt: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new TerminalLogFile(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.size = source["size"];
+	        this.modifiedAt = this.convertValues(source["modifiedAt"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class TerminalLogSettings {
+	    enabled: boolean;
+	    savePath: string;
+	    defaultPath: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TerminalLogSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.savePath = source["savePath"];
+	        this.defaultPath = source["defaultPath"];
 	    }
 	}
 	export class TerminalSize {

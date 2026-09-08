@@ -34,6 +34,10 @@ type ConnectionConfig struct {
 	AuthType string `json:"authType"`
 	// SavedNodeID > 0 时，从 keyring 加载凭证覆盖上面字段。
 	SavedNodeID int64 `json:"savedNodeId"`
+	// KeepaliveEnabled 是否启用 SSH 连接保活，定期发送 keepalive 请求防止连接断开。
+	KeepaliveEnabled bool `json:"keepaliveEnabled"`
+	// KeepaliveInterval 保活间隔（秒），默认 30。
+	KeepaliveInterval int `json:"keepaliveInterval"`
 }
 
 type TerminalSize struct {
@@ -92,12 +96,14 @@ type AIChatMessage struct {
 }
 
 type sshConnection struct {
-	client   *ssh.Client
-	session  *ssh.Session
-	input    io.WriteCloser
-	host     string
-	port     int
-	username string
+	client          *ssh.Client
+	session         *ssh.Session
+	input           io.WriteCloser
+	host            string
+	port            int
+	username        string
+	logger          *terminalLogger
+	keepaliveCancel func()
 }
 
 // App owns the active SSH terminal sessions, keyed by tabId.
@@ -178,6 +184,9 @@ func (a *App) shutdown(ctx context.Context) {
 	a.mu.Unlock()
 	for _, c := range conns {
 		_ = c.session.Close()
+		if c.logger != nil {
+			_ = c.logger.closeWithError(nil)
+		}
 		_ = c.client.Close()
 	}
 	if a.db != nil {
@@ -274,15 +283,25 @@ func (a *App) Connect(tabId string, config ConnectionConfig, size TerminalSize) 
 		client.Close()
 		return "", err
 	}
-	session.Stdout = terminalEventWriter{app: a, tabId: tabId}
-	session.Stderr = terminalEventWriter{app: a, tabId: tabId}
+	logger, logErr := a.newTerminalLogger(tabId, config)
+	if logErr != nil {
+		fmt.Printf("无法创建终端日志：%v\n", logErr)
+	}
+	session.Stdout = terminalEventWriter{app: a, tabId: tabId, stream: "stdout", logger: logger}
+	session.Stderr = terminalEventWriter{app: a, tabId: tabId, stream: "stderr", logger: logger}
 	modes := ssh.TerminalModes{ssh.ECHO: 1, ssh.TTY_OP_ISPEED: 14400, ssh.TTY_OP_OSPEED: 14400}
 	if err := session.RequestPty("xterm-256color", size.Rows, size.Columns, modes); err != nil {
+		if logger != nil {
+			_ = logger.closeWithError(err)
+		}
 		session.Close()
 		client.Close()
 		return "", fmt.Errorf("无法请求终端：%w", err)
 	}
 	if err := session.Shell(); err != nil {
+		if logger != nil {
+			_ = logger.closeWithError(err)
+		}
 		session.Close()
 		client.Close()
 		return "", fmt.Errorf("无法启动远程终端：%w", err)
@@ -291,6 +310,16 @@ func (a *App) Connect(tabId string, config ConnectionConfig, size TerminalSize) 
 	conn := &sshConnection{
 		client: client, session: session, input: input,
 		host: strings.TrimSpace(config.Host), port: config.Port, username: config.Username,
+		logger: logger,
+	}
+	if config.KeepaliveEnabled {
+		interval := config.KeepaliveInterval
+		if interval < 10 {
+			interval = 30
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		conn.keepaliveCancel = cancel
+		go keepaliveLoop(client, time.Duration(interval)*time.Second, ctx)
 	}
 	a.mu.Lock()
 	a.connections[tabId] = conn
@@ -474,13 +503,54 @@ func (a *App) PickPrivateKeyFile() (string, error) {
 	return path, nil
 }
 
+// keepaliveLoop 定期发送 SSH keepalive 请求，防止连接因空闲超时被断开。
+// 如果连接不可用，SendRequest 会返回错误，goroutine 退出。
+func keepaliveLoop(client *ssh.Client, interval time.Duration, ctx context.Context) {
+	addr := client.Conn.RemoteAddr().String()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	fmt.Printf("[keepalive] 已启动保活 → %s，间隔 %v\n", addr, interval)
+	for {
+		select {
+		case <-ticker.C:
+			done := make(chan error, 1)
+			go func() {
+				_, _, err := client.Conn.SendRequest("keepalive@openssh.com", true, nil)
+				done <- err
+			}()
+			select {
+			case err := <-done:
+				if err != nil {
+					fmt.Printf("[keepalive] 保活失败 → %s：%v\n", addr, err)
+					return
+				}
+				fmt.Printf("[keepalive] 保活成功 → %s\n", addr)
+			case <-time.After(15 * time.Second):
+				fmt.Printf("[keepalive] 保活超时 → %s\n", addr)
+				return
+			case <-ctx.Done():
+				fmt.Printf("[keepalive] 保活已停止 → %s\n", addr)
+				return
+			}
+		case <-ctx.Done():
+			fmt.Printf("[keepalive] 保活已停止 → %s\n", addr)
+			return
+		}
+	}
+}
+
 func (a *App) watchSession(tabId string, session *ssh.Session) {
 	err := session.Wait()
 	a.mu.Lock()
+	var logger *terminalLogger
 	if a.connections[tabId] != nil && a.connections[tabId].session == session {
+		logger = a.connections[tabId].logger
 		delete(a.connections, tabId)
 	}
 	a.mu.Unlock()
+	if logger != nil {
+		_ = logger.closeWithError(err)
+	}
 	if err != nil {
 		runtime.EventsEmit(a.ctx, "terminal-status", map[string]string{"tabId": tabId, "message": fmt.Sprintf("会话已结束：%v", err)})
 	} else {
@@ -494,6 +564,13 @@ func (a *App) SendInput(tabId string, input string) error {
 	conn, ok := a.connections[tabId]
 	if !ok {
 		return fmt.Errorf("未建立 SSH 连接")
+	}
+	// 先记录输入，再写入 PTY。PTY 开启 ECHO 时，远端回显可能在 Write
+	// 返回前就通过 stdout 到达；若顺序相反，回显会被日志排到输入块之前。
+	if conn.logger != nil {
+		if logErr := conn.logger.writeInput(input); logErr != nil {
+			fmt.Printf("写入终端日志失败：%v\n", logErr)
+		}
 	}
 	_, err := conn.input.Write([]byte(input))
 	return err
@@ -519,16 +596,29 @@ func (a *App) Disconnect(tabId string) error {
 	if !ok {
 		return nil
 	}
+	if conn.keepaliveCancel != nil {
+		conn.keepaliveCancel()
+	}
 	_ = conn.session.Close()
+	if conn.logger != nil {
+		_ = conn.logger.closeWithError(nil)
+	}
 	return conn.client.Close()
 }
 
 type terminalEventWriter struct {
-	app   *App
-	tabId string
+	app    *App
+	tabId  string
+	stream string
+	logger *terminalLogger
 }
 
 func (w terminalEventWriter) Write(data []byte) (int, error) {
+	if w.logger != nil {
+		if err := w.logger.writeOutput(w.stream, string(data)); err != nil {
+			fmt.Printf("写入终端日志失败：%v\n", err)
+		}
+	}
 	runtime.EventsEmit(w.app.ctx, "terminal-output", map[string]any{"tabId": w.tabId, "data": string(data)})
 	w.app.dispatchTap(w.tabId, data)
 	return len(data), nil

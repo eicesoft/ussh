@@ -213,13 +213,15 @@
   }
 
   .split-resizer.split-resizer--hidden::after {
-    inset: 0 -0.5px;
+    /* 避开终端面板的 8px 圆角，只在竖直边缘区间绘制高亮。 */
+    inset: 8px -0.5px;
+    border-radius: 999px;
   }
 
   /* 保持分隔线纤细，同时扩大可拖拽的鼠标命中区域。 */
   .split-resizer::before {
     position: absolute;
-    inset: 0 -3px;
+    inset: 0 -6px;
     content: '';
     cursor: col-resize;
   }

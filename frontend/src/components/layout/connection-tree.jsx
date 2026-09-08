@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Copy, FolderPlus, Link2, Plug, Terminal, Pencil, ExternalLink, Search, Trash2 } from 'lucide-react';
+import { Copy, FolderPlus, Link2, Plug, Terminal, Pencil, ExternalLink, FileText, Search, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -23,6 +23,7 @@ export function ConnectionTree({
   onReorderNodes,
   onEditSaved,
   onCloneSaved,
+  onViewSavedLogs,
   onDeleteSaved,
   onEditFolder,
   onDeleteFolder,
@@ -123,6 +124,7 @@ export function ConnectionTree({
           onOpen={onOpenSaved}
           onEdit={onEditSaved}
           onClone={onCloneSaved}
+          onViewLogs={onViewSavedLogs}
           onDelete={onDeleteSaved}
           onReorderNode={handleReorderNode}
           canReorderNode={canReorderNode}
@@ -222,6 +224,7 @@ export function ConnectionTree({
                     onOpen={onOpenSaved}
                     onEdit={onEditSaved}
                     onClone={onCloneSaved}
+                    onViewLogs={onViewSavedLogs}
                     onDelete={onDeleteSaved}
                     onReorderNode={handleReorderNode}
                     canReorderNode={canReorderNode}
@@ -240,7 +243,7 @@ export function ConnectionTree({
   );
 }
 
-function SavedRootNode({ node, color, nested = false, onOpen, onEdit, onClone, onDelete, onReorderNode, canReorderNode, sortable = true }) {
+function SavedRootNode({ node, color, nested = false, onOpen, onEdit, onClone, onViewLogs, onDelete, onReorderNode, canReorderNode, sortable = true }) {
   const showActions = Boolean(onOpen || onEdit);
   const [contextMenu, setContextMenu] = useState({ open: false, x: 0, y: 0 });
   const [dropPosition, setDropPosition] = useState(null);
@@ -393,6 +396,17 @@ function SavedRootNode({ node, color, nested = false, onOpen, onEdit, onClone, o
               <Pencil className="h-3.5 w-3.5" />
               编辑
             </div>
+          )}
+          {onViewLogs && (
+            <button
+              type="button"
+              role="menuitem"
+              className="flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+              onClick={() => { setContextMenu({ open: false, x: 0, y: 0 }); onViewLogs(node); }}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              查看日志
+            </button>
           )}
           {onClone && (
             <div

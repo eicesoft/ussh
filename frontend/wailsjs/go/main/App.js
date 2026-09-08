@@ -30,6 +30,10 @@ export function DeleteSSHLink(arg1) {
   return window['go']['main']['App']['DeleteSSHLink'](arg1);
 }
 
+export function DeleteTerminalLog(arg1, arg2) {
+  return window['go']['main']['App']['DeleteTerminalLog'](arg1, arg2);
+}
+
 export function Disconnect(arg1) {
   return window['go']['main']['App']['Disconnect'](arg1);
 }
@@ -50,12 +54,20 @@ export function GetSystemInfo(arg1) {
   return window['go']['main']['App']['GetSystemInfo'](arg1);
 }
 
+export function GetTerminalLogSettings() {
+  return window['go']['main']['App']['GetTerminalLogSettings']();
+}
+
 export function ListConnectionNodes() {
   return window['go']['main']['App']['ListConnectionNodes']();
 }
 
 export function ListSftp(arg1, arg2) {
   return window['go']['main']['App']['ListSftp'](arg1, arg2);
+}
+
+export function ListTerminalLogs(arg1) {
+  return window['go']['main']['App']['ListTerminalLogs'](arg1);
 }
 
 export function MoveNode(arg1, arg2) {
@@ -68,6 +80,14 @@ export function PickPrivateKeyFile() {
 
 export function PickSavePath(arg1) {
   return window['go']['main']['App']['PickSavePath'](arg1);
+}
+
+export function PickTerminalLogDirectory() {
+  return window['go']['main']['App']['PickTerminalLogDirectory']();
+}
+
+export function ReadTerminalLog(arg1, arg2) {
+  return window['go']['main']['App']['ReadTerminalLog'](arg1, arg2);
 }
 
 export function ReorderNodes(arg1, arg2) {
@@ -96,6 +116,10 @@ export function SetCredential(arg1, arg2) {
 
 export function SetGpuAcceleration(arg1) {
   return window['go']['main']['App']['SetGpuAcceleration'](arg1);
+}
+
+export function SetTerminalLogSettings(arg1) {
+  return window['go']['main']['App']['SetTerminalLogSettings'](arg1);
 }
 
 export function SftpDownload(arg1, arg2, arg3) {

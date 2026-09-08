@@ -16,6 +16,8 @@ export function DeleteFolder(arg1:number):Promise<void>;
 
 export function DeleteSSHLink(arg1:number):Promise<void>;
 
+export function DeleteTerminalLog(arg1:string,arg2:string):Promise<void>;
+
 export function Disconnect(arg1:string):Promise<void>;
 
 export function ExecRemoteCommand(arg1:string,arg2:string,arg3:number):Promise<backend.RemoteCommandResult>;
@@ -26,15 +28,23 @@ export function GetCredential(arg1:number):Promise<backend.CredentialView>;
 
 export function GetSystemInfo(arg1:string):Promise<backend.SystemInfo>;
 
+export function GetTerminalLogSettings():Promise<backend.TerminalLogSettings>;
+
 export function ListConnectionNodes():Promise<Array<backend.SavedNode>>;
 
 export function ListSftp(arg1:string,arg2:string):Promise<Array<backend.SftpEntry>>;
+
+export function ListTerminalLogs(arg1:string):Promise<Array<backend.TerminalLogFile>>;
 
 export function MoveNode(arg1:number,arg2:number):Promise<backend.SavedNode>;
 
 export function PickPrivateKeyFile():Promise<string>;
 
 export function PickSavePath(arg1:string):Promise<string>;
+
+export function PickTerminalLogDirectory():Promise<string>;
+
+export function ReadTerminalLog(arg1:string,arg2:string):Promise<backend.TerminalLogContent>;
 
 export function ReorderNodes(arg1:number,arg2:Array<number>):Promise<void>;
 
@@ -49,6 +59,8 @@ export function SetBackdropType(arg1:string):Promise<void>;
 export function SetCredential(arg1:number,arg2:backend.SavedCredential):Promise<void>;
 
 export function SetGpuAcceleration(arg1:boolean):Promise<void>;
+
+export function SetTerminalLogSettings(arg1:backend.TerminalLogSettings):Promise<void>;
 
 export function SftpDownload(arg1:string,arg2:string,arg3:string):Promise<number>;
 

@@ -6,12 +6,65 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-// appFileConfig 是 app.json 的结构，只保存"窗口创建时就需要"的启动级配置。
+// appFileConfig 保存应用级持久配置。
 type appFileConfig struct {
-	GpuAcceleration *bool  `json:"gpuAcceleration,omitempty"`
-	BackdropType    string `json:"backdropType,omitempty"`
+	GpuAcceleration *bool                `json:"gpuAcceleration,omitempty"`
+	BackdropType    string               `json:"backdropType,omitempty"`
+	TerminalLog     *TerminalLogSettings `json:"terminalLog,omitempty"`
+}
+
+var appConfigMu sync.Mutex
+
+type TerminalLogSettings struct {
+	Enabled     bool   `json:"enabled"`
+	SavePath    string `json:"savePath"`
+	DefaultPath string `json:"defaultPath"`
+}
+
+func (a *App) GetTerminalLogSettings() (TerminalLogSettings, error) {
+	appConfigMu.Lock()
+	defer appConfigMu.Unlock()
+	path, err := appConfigPath()
+	if err != nil {
+		return TerminalLogSettings{}, err
+	}
+	defaultPath := filepath.Join(filepath.Dir(path), "terminal-logs")
+	settings := TerminalLogSettings{Enabled: true, SavePath: defaultPath, DefaultPath: defaultPath}
+	if saved := readAppConfig().TerminalLog; saved != nil {
+		settings.Enabled = saved.Enabled
+		if saved.SavePath != "" {
+			settings.SavePath = saved.SavePath
+		}
+	}
+	return settings, nil
+}
+
+func (a *App) SetTerminalLogSettings(settings TerminalLogSettings) error {
+	settings.SavePath = strings.TrimSpace(settings.SavePath)
+	if settings.SavePath != "" && !filepath.IsAbs(settings.SavePath) {
+		return fmt.Errorf("日志保存路径必须是绝对路径")
+	}
+	if settings.SavePath != "" {
+		settings.SavePath = filepath.Clean(settings.SavePath)
+	}
+	settings.DefaultPath = ""
+	appConfigMu.Lock()
+	defer appConfigMu.Unlock()
+	cfg := readAppConfig()
+	cfg.TerminalLog = &settings
+	return writeAppConfig(cfg)
+}
+
+func (a *App) PickTerminalLogDirectory() (string, error) {
+	if a.ctx == nil {
+		return "", fmt.Errorf("应用尚未就绪")
+	}
+	return runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{Title: "选择终端日志保存目录", CanCreateDirectories: true})
 }
 
 // appConfigPath 返回应用级配置文件路径，与连接库同目录（UserConfigDir/uSSH/app.json）。
@@ -77,6 +130,8 @@ func LoadBackdropType() string {
 
 // SetGpuAcceleration 持久化 GPU 加速开关，窗口创建时读取，重启后生效。
 func (a *App) SetGpuAcceleration(enabled bool) error {
+	appConfigMu.Lock()
+	defer appConfigMu.Unlock()
 	cfg := readAppConfig()
 	cfg.GpuAcceleration = &enabled
 	return writeAppConfig(cfg)
@@ -84,6 +139,8 @@ func (a *App) SetGpuAcceleration(enabled bool) error {
 
 // SetBackdropType 持久化背景材质；macOS 上立即生效，Windows/Linux 在下次启动时生效。
 func (a *App) SetBackdropType(material string) error {
+	appConfigMu.Lock()
+	defer appConfigMu.Unlock()
 	material = strings.ToLower(strings.TrimSpace(material))
 	if !backdropTypes[material] {
 		return fmt.Errorf("不支持的背景材质：%s", material)

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
+import { PersistedWidthPanel } from '@/components/ui/persisted-width-panel';
 import { Quit, WindowIsMaximised, WindowMinimise, WindowToggleMaximise } from '../../../wailsjs/runtime/runtime';
 import { Maximize2, Minus, PanelLeftClose, PanelLeftOpen, Settings, X } from 'lucide-react';
 import { ConnectionTree } from './connection-tree';
@@ -9,6 +10,8 @@ import { StatusBar } from './status-bar';
 import { BroadcastInput } from './broadcast-input';
 import { ConnectionForm } from '@/components/connection/connection-form';
 import { TerminalView } from '@/components/connection/terminal-view';
+import { TerminalLogDialog } from '@/components/connection/terminal-log-dialog';
+import { TerminalLogView } from '@/components/connection/terminal-log-view';
 import { TerminalActions } from '@/components/connection/terminal-actions';
 import { SavedLinkDialog } from '@/components/connection/saved-link-dialog';
 import { NewFolderDialog } from '@/components/connection/new-folder-dialog';
@@ -40,7 +43,7 @@ import '@/plugins';
 import { PluginContext } from '@/plugins/context';
 
 export function Shell() {
-  const { settings, applySettings } = useSettings();
+  const { settings, applySettings, patchSettings } = useSettings();
   const {
     tabs,
     workspaceTabs,
@@ -53,6 +56,7 @@ export function Shell() {
     createWorkspace,
     deleteWorkspace,
     newTab,
+    openTab,
     closeTab,
     setTabStatus,
     writeToTab,
@@ -84,6 +88,7 @@ export function Shell() {
   const [showAboutDialog, setShowAboutDialog] = useState(false);
   const [showQuitDialog, setShowQuitDialog] = useState(false);
   const [showBroadcastInput, setShowBroadcastInput] = useState(false);
+  const [logSourceTab, setLogSourceTab] = useState(null);
   const [showSavedLinkDialog, setShowSavedLinkDialog] = useState(false);
   const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
   const [showNewWorkspaceDialog, setShowNewWorkspaceDialog] = useState(false);
@@ -288,6 +293,8 @@ export function Shell() {
             port: payload.port,
             username: payload.username,
             authType: payload.authType,
+            keepaliveEnabled: payload.keepaliveEnabled,
+            keepaliveInterval: payload.keepaliveInterval,
           });
           if (credentialChanged) {
             await setCredential(editingNode.id, cred);
@@ -299,6 +306,8 @@ export function Shell() {
             port: payload.port,
             username: payload.username,
             authType: payload.authType,
+            keepaliveEnabled: payload.keepaliveEnabled,
+            keepaliveInterval: payload.keepaliveInterval,
           });
           if (created?.id && credentialChanged) {
             await setCredential(created.id, cred);
@@ -351,6 +360,13 @@ export function Shell() {
         updateTab(tabId, tab => ({
           label: tab.name || `${payload.username || 'user'}@${payload.host}`,
         }));
+        // 连接已建立，a.connections[tabId] 已存在。此时强制同步终端实际尺寸，
+        // 避免 mount 阶段的 fit() 因竞争条件被 Go 端丢弃（ResizeTerminal 在
+        // Connect 尚未写入 connections 映射时静默跳过）。
+        const currentTerm = termsRef.current[tabId];
+        if (currentTerm && currentTerm.cols > 0 && currentTerm.rows > 0) {
+          api.resizeTerminal(tabId, { columns: currentTerm.cols, rows: currentTerm.rows }).catch(() => {});
+        }
         // 连接成功后异步读取系统信息，既不阻塞终端连接，也不污染用户终端输出。
         void refreshSystemInfo(tabId);
       } catch (e) {
@@ -376,6 +392,8 @@ export function Shell() {
         keyFile: '',
         authType: node.authType || 'password',
         savedNodeId: node.id,
+        keepaliveEnabled: node.keepaliveEnabled,
+        keepaliveInterval: node.keepaliveInterval || 30,
       };
       updateTab(id, { label: node.name, name: node.name, sourceNodeId: node.id, color, form });
       handleConnect(id, form);
@@ -404,6 +422,37 @@ export function Shell() {
     [handleConnect, newTab, updateTab],
   );
 
+  const openLogList = useCallback(tab => {
+    if (tab?.kind === 'connection') setLogSourceTab(tab);
+  }, []);
+
+  const openSavedLogList = useCallback(node => {
+    setLogSourceTab({ label: node.name, form: { savedNodeId: node.id } });
+  }, []);
+
+  const openLogTab = useCallback((sourceTab, log) => {
+    const connectionId = String(sourceTab.form?.savedNodeId || sourceTab.id);
+    const existing = tabs.find(tab => (
+      tab.kind === 'log' && tab.log?.connectionId === connectionId && tab.log?.name === log.name
+    ));
+    if (existing) {
+      selectTab(existing.id);
+    } else {
+      openTab({
+        kind: 'log',
+        label: log.name.replace(/\.jsonl$/, ''),
+        status: 'idle',
+        log: {
+          connectionId,
+          name: log.name,
+          size: log.size,
+          modifiedAt: log.modifiedAt,
+        },
+      }, sourceTab.id);
+    }
+    setLogSourceTab(null);
+  }, [openTab, selectTab, tabs]);
+
   const restoredTabsRef = useRef(false);
   useEffect(() => {
     if (!settings.restoreTabs || !savedNodesLoaded || restoredTabsRef.current) return;
@@ -424,6 +473,8 @@ export function Shell() {
         keyFile: '',
         authType: node.authType || 'password',
         savedNodeId: node.id,
+        keepaliveEnabled: node.keepaliveEnabled,
+        keepaliveInterval: node.keepaliveInterval || 30,
       };
       updateTab(tab.id, {
         label: node.name,
@@ -457,6 +508,8 @@ export function Shell() {
         keyFile: credential.keyFile || '',
         authType: payload.authType || 'password',
         savedNodeId: 0,
+        keepaliveEnabled: payload.keepaliveEnabled,
+        keepaliveInterval: Number(payload.keepaliveInterval) || 30,
       };
       const label = payload.name || `${payload.username || 'user'}@${payload.host}`;
       updateTab(id, { label, name: payload.name, form });
@@ -496,7 +549,8 @@ export function Shell() {
     const nextWidth = Math.round(inPixels);
     if (nextWidth === 0) return;
     connectionTreeHeaderRef.current?.style.setProperty('--connection-tree-width', `${nextWidth + 1}px`);
-  }, []);
+    patchSettings({ sidebarWidth: nextWidth });
+  }, [patchSettings]);
 
   const toggleConnectionTree = useCallback(() => {
     if (isConnectionTreeVisible) {
@@ -564,14 +618,14 @@ export function Shell() {
   );
 
   const terminalActive =
-    activeTab.kind !== 'dashboard' &&
+    activeTab.kind === 'connection' &&
     (activeTab.status === 'connected' || activeTab.status === 'connecting' || activeTab.status === 'closed');
   // 线性透明度在低值区间变化不明显：例如 30% 仍会把浅色亚克力压成整块灰色。
   // 使用缓出曲线，让用户降低滑块时能更快看到统一背景，同时 100% 仍保持完全不透明。
   const terminalOpacityPercent = previewTerminalOpacity ?? settings.terminal?.opacity ?? 100;
   const terminalOpacity = Math.pow(terminalOpacityPercent / 100, 1.5);
   const activeConnectionCount = tabs.filter(
-    tab => tab.kind !== 'dashboard' && (tab.status === 'connected' || tab.status === 'connecting'),
+    tab => tab.kind === 'connection' && (tab.status === 'connected' || tab.status === 'connecting'),
   ).length;
   // AI 智能体的流式监听不能因为切到未连接标签或总览而卸载；
   // 具体工具仍只在终端标签中显示，AI 会话按标签自行隔离。
@@ -619,7 +673,7 @@ export function Shell() {
               <WindowControl label="最小化" className="bg-[#ffbd2e]" onClick={minimiseWindow}><Minus /></WindowControl>
               <WindowControl label={isWindowMaximised ? '还原窗口' : '最大化'} className="bg-[#28c840]" onClick={toggleMaximiseWindow}><Maximize2 /></WindowControl>
             </div>
-            <span className="text-xs font-semibold tracking-tight text-foreground">uSSH</span>
+            <span className="text-xs font-semibold tracking-tight text-foreground">uSSH 🥤</span>
             <div
               className="app-no-drag ml-auto flex items-center gap-1"
               onDoubleClick={event => event.stopPropagation()}
@@ -665,18 +719,18 @@ export function Shell() {
             onDisconnect={disconnectTab}
             onClone={cloneTab}
             onTogglePinned={toggleTabPinned}
+            onViewLogs={openLogList}
           />
         </div>
       </header>
 
       <Group orientation="horizontal" className="app-main-panels min-h-0 flex-1 w-full overflow-hidden">
-        <Panel
+        <PersistedWidthPanel
           panelRef={connectionTreePanelRef}
           collapsible
           collapsedSize={0}
-          defaultSize={280}
-          minSize={200}
-          maxSize={340}
+          defaultSize={settings.sidebarWidth}
+          minSize={100}
           groupResizeBehavior="preserve-pixel-size"
           onResize={syncConnectionTreeWidth}
         >
@@ -694,11 +748,12 @@ export function Shell() {
             onReorderNodes={handleReorderNodes}
             onEditSaved={handleEditSaved}
             onCloneSaved={handleCloneSaved}
+            onViewSavedLogs={openSavedLogList}
             onDeleteSaved={handleDeleteSaved}
             onEditFolder={handleEditFolder}
             onDeleteFolder={handleDeleteSaved}
           />
-        </Panel>
+        </PersistedWidthPanel>
         <Separator
           className={cn(
             'split-resizer',
@@ -711,18 +766,18 @@ export function Shell() {
               : undefined
           }
         />
-        <Panel minSize={460}>
+        <Panel minSize={utilityPanelVisible ? 310 : 160}>
           <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
             <Group orientation="horizontal" className="min-h-0 flex-1">
-              <Panel minSize={320}>
+              <Panel minSize={160}>
                 <div
                   className={cn(
                     'terminal-panel relative flex h-full min-h-0 overflow-auto bg-transparent p-5',
                     terminalActive && 'mx-0.5 overflow-hidden rounded-lg p-0',
-                    activeTab.kind === 'dashboard' && 'overflow-hidden bg-transparent p-0',
+                    (activeTab.kind === 'dashboard' || activeTab.kind === 'log') && 'overflow-hidden bg-transparent p-0',
                   )}
                   style={
-                    terminalActive
+                    terminalActive || activeTab.kind === 'log'
                       ? { backgroundColor: `hsl(var(--terminal-surface) / ${terminalOpacity})` }
                       : undefined
                   }
@@ -733,6 +788,8 @@ export function Shell() {
                       onConnect={connectSavedLink}
                       onNewConnection={openNewConnection}
                     />
+                  ) : activeTab.kind === 'log' ? (
+                    <TerminalLogView log={activeTab.log} />
                   ) : terminalActive ? (
                     <TerminalActions active={activeUtility} onToggle={setActiveUtility} />
                   ) : (
@@ -744,7 +801,7 @@ export function Shell() {
                   )}
                   <div className="pointer-events-none absolute inset-0">
                     {tabs
-                      .filter(tab => tab.kind !== 'dashboard' && (
+                      .filter(tab => tab.kind === 'connection' && (
                         tab.status === 'connected' || tab.status === 'connecting' || tab.status === 'closed'
                       ))
                       .map(tab => (
@@ -775,16 +832,19 @@ export function Shell() {
               {utilityPanelVisible && (
                 <>
                   <Separator className="split-resizer split-resizer--hidden" />
-                  <Panel
-                    defaultSize={360}
-                    minSize={200}
-                    maxSize={680}
+                  <PersistedWidthPanel
+                    defaultSize={settings.utilityPanelWidth}
+                    minSize={150}
                     groupResizeBehavior="preserve-pixel-size"
+                    onResize={({ inPixels }) => {
+                      const w = Math.round(inPixels);
+                      if (w > 0) patchSettings({ utilityPanelWidth: w });
+                    }}
                   >
                     <PluginContext.Provider value={pluginContext}>
                       <UtilityPanel active={activeUtility} onToggle={setActiveUtility} />
                     </PluginContext.Provider>
-                  </Panel>
+                  </PersistedWidthPanel>
                 </>
               )}
             </Group>
@@ -810,6 +870,13 @@ export function Shell() {
         settings={settings}
         onSave={applySettings}
         onTerminalOpacityPreview={setPreviewTerminalOpacity}
+      />
+
+      <TerminalLogDialog
+        open={logSourceTab !== null}
+        tab={logSourceTab}
+        onClose={() => setLogSourceTab(null)}
+        onOpenLog={openLogTab}
       />
 
       <AboutDialog

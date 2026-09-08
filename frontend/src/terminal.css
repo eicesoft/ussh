@@ -137,6 +137,21 @@
   background: rgba(203, 213, 225, 0.82) !important;
 }
 
+/* 日志滚动区域沿用终端的窄滚动条样式。 */
+.terminal-log-view .scroll-area-scrollbar {
+  width: 6px !important;
+  right: 4px !important;
+  border: 0 !important;
+  background: transparent !important;
+  padding: 8px 0 !important;
+}
+
+.terminal-log-view .scroll-area-thumb {
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.46) !important;
+  box-shadow: 0 1px 5px rgba(15, 23, 42, 0.28);
+}
+
 /* xterm 用 helper-textarea 接收键盘事件；它不能拦截鼠标选区。
    必须彻底离开视口，避免浏览器把它当作"选区起点/终点"目标。 */
 .terminal-host .xterm .xterm-helper-textarea {

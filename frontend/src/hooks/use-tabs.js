@@ -270,17 +270,15 @@ export function useTabs({ restoreTabs = true } = {}) {
     return true;
   }, [activeWorkspaceId, tabs, workspaces]);
 
-  const newTab = useCallback(afterId => {
+  // openTab 是内容标签的统一创建入口。连接、日志和后续类型都共享相同的
+  // 工作区归属、插入位置、选中状态与关闭行为。
+  const openTab = useCallback((content, afterId) => {
     const id = newTabId();
     const tab = {
       id,
-      kind: 'connection',
-      label: '连接',
-      status: 'idle',
-      buffer: '',
       closable: true,
       workspaceId: activeWorkspaceId,
-      form: { ...blankForm },
+      ...content,
     };
     setTabs(prev => {
       const index = prev.findIndex(item => item.id === afterId);
@@ -293,6 +291,14 @@ export function useTabs({ restoreTabs = true } = {}) {
     setActiveId(id);
     return id;
   }, [activeWorkspaceId]);
+
+  const newTab = useCallback(afterId => openTab({
+    kind: 'connection',
+    label: '连接',
+    status: 'idle',
+    buffer: '',
+    form: { ...blankForm },
+  }, afterId), [openTab]);
 
   const closeTab = useCallback(
     id => {
@@ -371,6 +377,7 @@ export function useTabs({ restoreTabs = true } = {}) {
     createWorkspace,
     deleteWorkspace,
     newTab,
+    openTab,
     closeTab,
     setTabStatus,
     writeToTab,

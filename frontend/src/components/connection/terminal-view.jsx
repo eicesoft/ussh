@@ -15,6 +15,7 @@ export function TerminalView({ tab, active = true, onSend, onResize, onFocus, on
   const activeRef = useRef(active);
   const onResizeRef = useRef(onResize);
   const scheduleFitRef = useRef(null);
+  const fitRefreshTimersRef = useRef([]);
   activeRef.current = active;
   onResizeRef.current = onResize;
   const [ready, setReady] = useState(false);
@@ -140,6 +141,8 @@ export function TerminalView({ tab, active = true, onSend, onResize, onFocus, on
       window.removeEventListener('resize', scheduleFit);
       if (fitFrame !== null) cancelAnimationFrame(fitFrame);
       scheduleFitRef.current = null;
+      fitRefreshTimersRef.current.forEach(timer => window.clearTimeout(timer));
+      fitRefreshTimersRef.current = [];
       viewport?.removeEventListener('scroll', showScrollIndicator);
       screen?.removeEventListener('contextmenu', pasteOnRightClick, true);
       window.clearTimeout(scrollTimerRef.current);
@@ -170,7 +173,21 @@ export function TerminalView({ tab, active = true, onSend, onResize, onFocus, on
   }, [tab.buffer, ready]);
 
   useEffect(() => {
-    if (ready && active) scheduleFitRef.current?.();
+    if (!ready || !active) return undefined;
+    // A terminal tab is kept mounted in an invisible overlay. When it becomes
+    // visible, xterm may have measured the old (hidden) geometry already, and
+    // the parent does not necessarily emit another ResizeObserver notification.
+    // Refit across the next few layout passes so full-screen TUIs receive the
+    // current PTY size without requiring a manual window resize.
+    scheduleFitRef.current?.();
+    fitRefreshTimersRef.current.forEach(timer => window.clearTimeout(timer));
+    fitRefreshTimersRef.current = [0, 40, 160].map(delay => window.setTimeout(() => {
+      scheduleFitRef.current?.();
+    }, delay));
+    return () => {
+      fitRefreshTimersRef.current.forEach(timer => window.clearTimeout(timer));
+      fitRefreshTimersRef.current = [];
+    };
   }, [active, ready, tab.status]);
 
   useEffect(() => {

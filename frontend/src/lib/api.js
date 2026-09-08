@@ -4,6 +4,30 @@ import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime';
 const appApi = () => window.go?.main?.App;
 
 export const api = {
+  async listTerminalLogs(connectionId) {
+    if (!appApi()?.ListTerminalLogs) throw new Error('日志浏览不可用，请在新版 uSSH 应用中打开。');
+    return appApi().ListTerminalLogs(connectionId);
+  },
+  async readTerminalLog(connectionId, name) {
+    if (!appApi()?.ReadTerminalLog) throw new Error('日志浏览不可用，请在新版 uSSH 应用中打开。');
+    return appApi().ReadTerminalLog(connectionId, name);
+  },
+  async deleteTerminalLog(connectionId, name) {
+    if (!appApi()?.DeleteTerminalLog) throw new Error('日志删除不可用，请在新版 uSSH 应用中打开。');
+    return appApi().DeleteTerminalLog(connectionId, name);
+  },
+  async getTerminalLogSettings() {
+    if (!appApi()?.GetTerminalLogSettings) throw new Error('日志设置不可用，请在新版 uSSH 应用中打开。');
+    return appApi().GetTerminalLogSettings();
+  },
+  async setTerminalLogSettings(settings) {
+    if (!appApi()?.SetTerminalLogSettings) throw new Error('日志设置不可用。');
+    return appApi().SetTerminalLogSettings(settings);
+  },
+  async pickTerminalLogDirectory() {
+    if (!appApi()?.PickTerminalLogDirectory) throw new Error('目录选择不可用。');
+    return appApi().PickTerminalLogDirectory();
+  },
   async connect(tabId, payload, size) {
     return appApi()?.Connect(tabId, payload, size);
   },
